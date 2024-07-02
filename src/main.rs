@@ -1,18 +1,16 @@
 /// This will be the main loop for the editor process/daemon(is this really a daemon, by definition?)
 use nlo_text_editor_server::{editor::Editor, ServerAction};
 use nlo_text_editor_server::ServerResponse;
+use nlo_text_editor_server::MESSAGE_SIZE;
 use std::{io::Write, net::{TcpListener, TcpStream}};
 use std::io::Read;
 use std::error::Error;
 
 
-const MESSAGE_SIZE: usize = 1024;
-
-
 fn main() -> Result<(), Box<dyn Error>>{
     // set up client/server stuff
     let listener = TcpListener::bind("127.0.0.1:7878").expect("failed to bind to port");
-    //println!("Server listening on port 7878");
+    println!("Server listening on port 7878");
     
     for stream in listener.incoming(){
         match stream{
@@ -31,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>>{
 }
     
 fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
-    let _editor = Editor::default();
+    let mut editor = Editor::default();
 
     let client_address = stream.peer_addr().unwrap();
     // return connection success response and assign client id?
@@ -50,7 +48,7 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
                 println!("server received: {:#?}", action);
                 
                 // perform requested action, if valid, and generate response
-                match server_action_to_response(action, &mut stream){
+                match server_action_to_response(action, &mut stream, &mut editor){
                     Some(response) => {
                         let serialized_response = ron::to_string(&response)?;
                         match stream.write(serialized_response.as_bytes()){
@@ -76,16 +74,39 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
     Ok(())
 }
 
-fn server_action_to_response(action: ServerAction, stream: &mut TcpStream) -> Option<ServerResponse>{
+fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, editor: &mut Editor) -> Option<ServerResponse>{
     match action{
         ServerAction::CloseConnection => {
             stream.shutdown(std::net::Shutdown::Both).unwrap();
             None
         },
-        ServerAction::OpenFile(_file) => {
-            // editor.open_document(file);
-            // generate text in view
-            Some(ServerResponse::DisplayView("file contents".to_string()))
+        ServerAction::OpenFile(file) => {
+            // i think we are trying to open files relative to our current(server) directory. CONFIRMED
+            //TODO: open file with absolut paths
+            match editor.open_document(&file){
+                Ok(_) => {
+                    Some(ServerResponse::Acknowledge)
+                }
+                Err(e) => {
+                    Some(ServerResponse::Failed(format!("{}", e)))
+                }
+            }
+        },
+        ServerAction::UpdateClientView(width, height) => {
+            if let Some(doc) = editor.document_mut(){
+                doc.set_client_view_size(width as usize, height as usize);
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
+        ServerAction::RequestClientViewText => {
+            match editor.document(){
+                Some(doc) => {
+                    Some(ServerResponse::DisplayView(doc.get_client_view_text()))
+                }
+                None => Some(ServerResponse::Failed("no document open".to_string()))
+            }
         }
         _ => None
     }

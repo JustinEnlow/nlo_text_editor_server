@@ -1,4 +1,4 @@
-use crate::Position;
+use crate::{Position, View};
 use std::fs;
 use std::io::{Error, Write};
 use unicode_segmentation::UnicodeSegmentation;
@@ -15,9 +15,7 @@ pub struct Document{
     cursor_anchor: Position,
     cursor_head: Position,
     stored_line_position: usize,
-    // should a view offset be stored here instead of the client?
-    // this would allow us to return a viewable buffer whether the view is
-    // clamped to cursor position, or if view ignores cursor position
+    client_view: View,
 }
 impl Default for Document{
     fn default() -> Self {
@@ -28,6 +26,7 @@ impl Default for Document{
             cursor_anchor: Position::default(),
             cursor_head: Position::default(),
             stored_line_position: 0,
+            client_view: View::default(),
         }
     }
 }
@@ -52,7 +51,40 @@ impl Document{
             cursor_anchor: Position::default(),
             cursor_head: Position::default(),
             stored_line_position: 0,
+            client_view: View::default(),
         })
+    }
+
+    pub fn set_client_view_size(&mut self, width: usize, height: usize){
+        self.client_view.width = width;
+        self.client_view.height = height;
+    }
+    //for doc tests
+    // ensure vertical_start is always less than vertical_end
+    // ensure horizontal_start is always less than horizontal_end
+    // if vertical_end - vertical_start is greater than document length, just return the available lines
+    // if horizontal_end - horizontal_start is greater than line length, just return the available chars
+    pub fn get_client_view_text(&self) -> String{
+        let mut client_view_text = String::new();
+        for (y, line) in self.lines.iter().enumerate(){
+            let mut bounded_line = String::new();
+            if y < self.client_view.vertical_start{}
+            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*can return early, because we're past our view */}
+            else{
+                for (x, char) in line.chars().enumerate(){
+                    if x < self.client_view.horizontal_start{}
+                    else if x > (self.client_view.width.saturating_sub(1) + self.client_view.horizontal_start){}
+                    else{
+                        bounded_line.push(char);
+                    }
+                }
+                client_view_text.push_str(format!("{}\n", bounded_line).as_str());
+            }
+        }
+        //client_view_text = "temporary text\n\nsome more text\n\n\n\nend".to_string();
+
+        client_view_text
+        
     }
 
     pub fn file_name(&self) -> Option<String>{
@@ -75,28 +107,6 @@ impl Document{
 
     pub fn _cursor_anchor(&self) -> Position{
         self.cursor_anchor
-    }
-
-    //for doc tests
-    // ensure vertical_start is always less than vertical_end
-    // ensure horizontal_start is always less than horizontal_end
-    // if vertical_end - vertical_start is greater than document length, just return the available lines
-    // if horizontal_end - horizontal_start is greater than line length, just return the available chars
-    pub fn lines_in_bounds(&self, vertical_start: usize, vertical_end: usize, horizontal_start: usize, horizontal_end: usize) -> Vec<String>{
-        // get all lines from vertical_start to vertical_end
-        // get all chars from horizontal_start to horizontal_end
-        // create new Vec
-        // create new String
-        // push all chars to string
-        // push all lines to vec
-        // return buffer
-        let mut new_lines = String::new();
-        for y in vertical_start..=vertical_end{
-            let line = &self.lines[y];
-            let bounded_line = line.get(horizontal_start..=horizontal_end).unwrap();
-            new_lines.push_str(bounded_line);
-        }
-        vec![String::new()]
     }
 
     pub fn lines_as_single_string(&self) -> String{

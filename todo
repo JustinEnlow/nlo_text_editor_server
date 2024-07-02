@@ -4,7 +4,11 @@
 [x] set up client-server to pass plain text messages
 [x] set up client-server to pass serialized messages back and forth
 // client-server as doc viewer at this point will send buffer with all lines in specified view area, not a diff/just the changes
-[ ] set up client-server as document viewer with no scrolling or view size changes
+[x] set up client-server as document viewer with no scrolling or view size changes
+[ ] set up client-server as document viewer with changeable view size
+[ ] set up client-server as document viewer with scrolling attached to cursor position
+[ ] set up client-server as document viewer with scrolling detached from cursor position
+[ ] set up client-server with editing functionality
     [ ] move cursor right
     [ ] move cursor left
     [ ] move cursor up
@@ -16,10 +20,6 @@
     [ ] make cursor maintain horizontal position or go to line end when moving up/down
     [ ] insert chars
     [ ] remove chars
-[ ] set up client-server as document viewer with changeable view size
-[ ] set up client-server as document viewer with scrolling attached to cursor position
-[ ] set up client-server as document viewer with scrolling detached from cursor position
-[ ] set up client-server with editing functionality
 [ ] set up client-server to save documents
 
 

@@ -4,104 +4,42 @@ pub mod editor;
 pub mod document;
 
 
+pub const MESSAGE_SIZE: usize = 4096;
+
+
 
 #[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub enum ServerAction{
-    Backspace,
     CloseConnection,
-    CloseDocument,
-    CloseDocumentIgnoringChanges,
-    CollapseSelectionCursor,
-    CommandModeAccept,
-    CommandModeBackspace,
-    CommandModeDelete,
-    CommandModeExit,
-    CommandModeInsertChar(char),
-    CommandModeMoveCursorLeft,
-    CommandModeMoveCursorLineEnd,
-    CommandModeMoveCursorLineStart,
-    CommandModeMoveCursorRight,
-    DecrementFocusedDocument,
-    Delete,
-    DisplayLineNumbers,
-    DisplayStatusBar,
-    ExtendSelectionDown,
-    ExtendSelectionLeft,
-    ExtendSelectionLineEnd,
-    ExtendSelectionLineStart,
-    ExtendSelectionRight,
-    ExtendSelectionUp,
-    FindReplaceModeAccept,
-    FindReplaceModeBackspace,
-    FindReplaceModeDelete,
-    FindReplaceModeExit,
-    FindReplaceModeInsertChar(char),
-    FindReplaceModeMoveCursorLeft,
-    FindReplaceModeMoveCursorLineEnd,
-    FindReplaceModeMoveCursorLineStart,
-    FindReplaceModeMoveCursorRight,
-    FindReplaceModeNextInstance,
-    FindReplaceModePreviousInstance,
-    FindReplaceModeSwitchUtilBarFocus,
-    GotoModeAccept,
-    GotoModeBackspace,
-    GotoModeDelete,
-    GotoModeExit,
-    GotoModeInsertChar(char),
-    GotoModeMoveCursorLeft,
-    GotoModeMoveCursorLineEnd,
-    GotoModeMoveCursorLineStart,
-    GotoModeMoveCursorRight,
-    IncrementFocusedDocument,
-    InsertChar(char),
-    InsertNewline,
-    InsertTab,
-    MoveCursorDocumentEnd,
-    MoveCursorDocumentStart,
-    MoveCursorDown,
-    MoveCursorLeft,
-    MoveCursorLineEnd,
-    MoveCursorLineStart,
-    MoveCursorPageDown,
-    MoveCursorPageUp,
-    MoveCursorRight,
-    MoveCursorUp,
-    MoveCursorWordEnd,
-    MoveCursorWordStart,
-    NewDocument,
-    NoOp,
     OpenFile(String), // (String, View)? i think we need to supply document rect size, so we can return the correct text to display
-    OpenNewTerminalWindow,
-    Quit,
-    QuitIgnoringChanges,
-    Save,
-    SaveAsModeAccept,
-    SaveAsModeBackspace,
-    SaveAsModeClear,
-    SaveAsModeDelete,
-    SaveAsModeInsertChar(char),
-    SaveAsModeMoveCursorLeft,
-    SaveAsModeMoveCursorLineEnd,
-    SaveAsModeMoveCursorLineStart,
-    SaveAsModeMoveCursorRight,
-    SetModeCommand,
-    SetModeFindReplace,
-    SetModeGoto,
-    WarningModeExit,
-    //UpdateViewSize(usize, usize)
+    RequestClientViewText,
+    UpdateClientView(u16, u16)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerResponse{
     ConnectionSucceeded,
+    Acknowledge,
     DisplayView(String),
+    Failed(String),
 }
 
+#[derive(Debug)]
 pub struct View{
     horizontal_start: usize,
     vertical_start: usize,
     width: usize,
     height: usize,
+}
+impl View{
+    pub fn default() -> Self{
+        Self {
+            horizontal_start: 0,
+            vertical_start: 0,
+            width: 0,
+            height: 0
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]

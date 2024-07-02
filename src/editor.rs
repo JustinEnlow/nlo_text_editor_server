@@ -1,5 +1,3 @@
-use crate::View;
-use crate::Position;
 use crate::document::Document;
 use std::error::Error;
 
@@ -18,19 +16,6 @@ impl Default for Editor{
     }
 }
 impl Editor{
-    pub fn generate_buffer_for_current_view(&self, offset: Position, view: View) -> Vec<String>{
-        let mut view_buffer = Vec::new();
-        if let Some(doc) = self.document(){
-            // if view is not detached from cursor
-            view_buffer = doc.lines_in_bounds(
-                doc.cursor_position().y() - offset.y(), 
-                doc.cursor_position().y() - view.height, 
-                doc.cursor_position().x() - offset.x(), 
-                doc.cursor_position().x() - view.width
-            )
-        }
-        view_buffer
-    }
     pub fn documents(&self) -> &Vec<Document>{
         &self.documents
     }
