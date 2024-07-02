@@ -1,0 +1,31 @@
+// do full doctests or unit tests for each item before moving on to the next
+
+[x] set up client-server connections
+[x] set up client-server to pass plain text messages
+[x] set up client-server to pass serialized messages back and forth
+// client-server as doc viewer at this point will send buffer with all lines in specified view area, not a diff/just the changes
+[ ] set up client-server as document viewer with no scrolling or view size changes
+    [ ] move cursor right
+    [ ] move cursor left
+    [ ] move cursor up
+    [ ] move cursor down
+    [ ] restrict cursor to line start/end
+    [ ] restrict cursor to document start/end
+    [ ] cursor left at line start moves to previous line end if available
+    [ ] cursor right at line end moves to next line start if available
+    [ ] make cursor maintain horizontal position or go to line end when moving up/down
+    [ ] insert chars
+    [ ] remove chars
+[ ] set up client-server as document viewer with changeable view size
+[ ] set up client-server as document viewer with scrolling attached to cursor position
+[ ] set up client-server as document viewer with scrolling detached from cursor position
+[ ] set up client-server with editing functionality
+[ ] set up client-server to save documents
+
+
+
+// not in a specific order
+[ ] set up client-server to handle multiple client connections
+[ ] highlighting for syntax/selections
+[ ] handle multiple cursors
+[ ] cursor to line start vs line text start - allow user to decide whether they are separate or if subsequent presses toggle between the two
