@@ -364,7 +364,7 @@ impl Document{
         //
         if self.cursor_position().y() < self.client_view.vertical_start{
             self.client_view.vertical_start = self.client_view.vertical_start.saturating_sub(1);
-            //TODO: return bool informing that client view will have changed
+            //return bool informing that client view will have changed
             return true;
         }
         //
@@ -372,7 +372,7 @@ impl Document{
         false
     }
 
-    pub fn move_cursor_down(&mut self){
+    pub fn move_cursor_down(&mut self) -> bool{
         if self.cursor_position().y.saturating_add(1) < self.len(){
             self.cursor_anchor.y = self.cursor_position().y.saturating_add(1);
             self.cursor_head.y = self.cursor_position().y.saturating_add(1);
@@ -382,8 +382,12 @@ impl Document{
         //
         if self.cursor_position().y() >=  self.client_view.vertical_start + self.client_view.height{
             self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(1);
+            //return bool informing that client view will have changed
+            return true;
         }
         //
+
+        false
     }
 
     pub fn move_cursor_right(&mut self){

@@ -12,7 +12,7 @@ pub const MESSAGE_SIZE: usize = 4096;
 pub enum ServerAction{
     CloseConnection,
     OpenFile(String), // (String, View)? i think we need to supply document rect size, so we can return the correct text to display
-    RequestClientViewText,
+    //RequestClientViewText,
     UpdateClientViewSize(u16, u16),
     ScrollClientViewDown(usize),
     ScrollClientViewLeft(usize),

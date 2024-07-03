@@ -93,23 +93,27 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::UpdateClientViewSize(width, height) => {
             if let Some(doc) = editor.document_mut(){
                 doc.set_client_view_size(width as usize, height as usize);
-                Some(ServerResponse::Acknowledge)
+                //Some(ServerResponse::Acknowledge)
+                let text_in_client_view = doc.get_client_view_text();
+                Some(ServerResponse::DisplayView(text_in_client_view))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
         },
-        ServerAction::RequestClientViewText => {
-            match editor.document(){
-                Some(doc) => {
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text()))
-                }
-                None => Some(ServerResponse::Failed("no document open".to_string()))
-            }
-        },
+        //ServerAction::RequestClientViewText => {
+        //    match editor.document(){
+        //        Some(doc) => {
+        //            Some(ServerResponse::DisplayView(doc.get_client_view_text()))
+        //        }
+        //        None => Some(ServerResponse::Failed("no document open".to_string()))
+        //    }
+        //},
         ServerAction::ScrollClientViewDown(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_down(amount);
-                Some(ServerResponse::Acknowledge)
+                //Some(ServerResponse::Acknowledge)
+                let text_in_client_view = doc.get_client_view_text();
+                Some(ServerResponse::DisplayView(text_in_client_view))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -117,7 +121,9 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewLeft(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_left(amount);
-                Some(ServerResponse::Acknowledge)
+                //Some(ServerResponse::Acknowledge)
+                let text_in_client_view = doc.get_client_view_text();
+                Some(ServerResponse::DisplayView(text_in_client_view))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -125,7 +131,9 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewRight(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_right(amount);
-                Some(ServerResponse::Acknowledge)
+                //Some(ServerResponse::Acknowledge)
+                let text_in_client_view = doc.get_client_view_text();
+                Some(ServerResponse::DisplayView(text_in_client_view))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -133,7 +141,9 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewUp(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_up(amount);
-                Some(ServerResponse::Acknowledge)
+                //Some(ServerResponse::Acknowledge)
+                let text_in_client_view = doc.get_client_view_text();
+                Some(ServerResponse::DisplayView(text_in_client_view))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -148,8 +158,14 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         },
         ServerAction::MoveCursorDown => {
             if let Some(doc) = editor.document_mut(){
-                doc.move_cursor_down();
-                Some(ServerResponse::Acknowledge)
+                let update_client_view = doc.move_cursor_down();
+                //Some(ServerResponse::Acknowledge)
+                if update_client_view{
+                    let text_in_client_view = doc.get_client_view_text();
+                    Some(ServerResponse::DisplayView(text_in_client_view))
+                }else{
+                    Some(ServerResponse::Acknowledge)
+                }
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -158,7 +174,13 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
             if let Some(doc) = editor.document_mut(){
                 let update_client_view = doc.move_cursor_up();
                 //TODO: make better response
-                Some(ServerResponse::Acknowledge)
+                //Some(ServerResponse::Acknowledge)
+                if update_client_view{
+                    let text_in_client_view = doc.get_client_view_text();
+                    Some(ServerResponse::DisplayView(text_in_client_view))
+                }else{
+                    Some(ServerResponse::Acknowledge)
+                }
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
