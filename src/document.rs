@@ -356,38 +356,35 @@ impl Document{
         }
     }
 
-    pub fn move_cursor_up(&mut self) -> bool{
+    // would checking returning client view changed bool here allow us to reduce DisplayView server response calls?
+    pub fn scroll_view_following_cursor(&mut self){
+        if self.cursor_position().y() < self.client_view.vertical_start{
+            self.client_view.vertical_start = self.cursor_position().y();
+        }
+        else if self.cursor_position().y() >= self.client_view.vertical_start.saturating_add(self.client_view.height){
+            self.client_view.vertical_start = self.cursor_position().y().saturating_sub(self.client_view.height).saturating_add(1);
+        }
+    
+        if self.cursor_position().x() < self.client_view.horizontal_start{
+            self.client_view.horizontal_start = self.cursor_position().x();
+        }
+        else if self.cursor_position().x() >= self.client_view.horizontal_start.saturating_add(self.client_view.width){
+            self.client_view.horizontal_start = self.cursor_position().x().saturating_sub(self.client_view.width).saturating_add(1);
+        }
+    }
+
+    pub fn move_cursor_up(&mut self){
         self.cursor_anchor.y = self.cursor_position().y.saturating_sub(1);
         self.cursor_head.y = self.cursor_position().y.saturating_sub(1);
         self.clamp_cursor_to_line_end();
-
-        //
-        if self.cursor_position().y() < self.client_view.vertical_start{
-            self.client_view.vertical_start = self.client_view.vertical_start.saturating_sub(1);
-            //return bool informing that client view will have changed
-            return true;
-        }
-        //
-
-        false
     }
 
-    pub fn move_cursor_down(&mut self) -> bool{
+    pub fn move_cursor_down(&mut self){
         if self.cursor_position().y.saturating_add(1) < self.len(){
             self.cursor_anchor.y = self.cursor_position().y.saturating_add(1);
             self.cursor_head.y = self.cursor_position().y.saturating_add(1);
         }
         self.clamp_cursor_to_line_end();
-
-        //
-        if self.cursor_position().y() >=  self.client_view.vertical_start + self.client_view.height{
-            self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(1);
-            //return bool informing that client view will have changed
-            return true;
-        }
-        //
-
-        false
     }
 
     pub fn move_cursor_right(&mut self){
@@ -421,12 +418,12 @@ impl Document{
         self.stored_line_position = self.cursor_position().x;
     }
 
-    pub fn move_cursor_page_up(&mut self, terminal_height: usize){
-        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y >= terminal_height{
+    pub fn move_cursor_page_up(&mut self/*, terminal_height: usize*/){
+        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y >= self.client_view.height/*terminal_height*/{
             // pages up while still displaying first line from previous page
             (
-                self.cursor_position().y.saturating_sub(terminal_height - 1),
-                self.cursor_position().y.saturating_sub(terminal_height - 1)
+                self.cursor_position().y.saturating_sub(self.client_view.height/*terminal_height*/ - 1),
+                self.cursor_position().y.saturating_sub(self.client_view.height/*terminal_height*/ - 1)
             )
             // to disregard first line on previous page, and do full page up use:
             /*(
@@ -439,13 +436,13 @@ impl Document{
         self.clamp_cursor_to_line_end();
     }
 
-    pub fn move_cursor_page_down(&mut self, terminal_height: usize){
+    pub fn move_cursor_page_down(&mut self/*, terminal_height: usize*/){
         let document_length = self.len();
-        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y.saturating_add(terminal_height) <= document_length{
+        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y.saturating_add(self.client_view.height/*terminal_height*/) <= document_length{
             // pages down while still displaying last line from previous page
             (
-                self.cursor_position().y.saturating_add(terminal_height - 1),
-                self.cursor_position().y.saturating_add(terminal_height - 1)
+                self.cursor_position().y.saturating_add(self.client_view.height/*terminal_height*/ - 1),
+                self.cursor_position().y.saturating_add(self.client_view.height/*terminal_height*/ - 1)
             )
             // to disregard last line on previous page, and do full page down use:
             /*(

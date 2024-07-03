@@ -21,6 +21,12 @@ pub enum ServerAction{
     RequestClientCursorPosition,
     MoveCursorDown,
     MoveCursorUp,
+    MoveCursorRight,
+    MoveCursorLeft,
+    MoveCursorLineEnd,
+    MoveCursorLineStart,
+    MoveCursorPageDown,
+    MoveCursorPageUp,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
