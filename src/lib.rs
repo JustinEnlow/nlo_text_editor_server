@@ -13,7 +13,11 @@ pub enum ServerAction{
     CloseConnection,
     OpenFile(String), // (String, View)? i think we need to supply document rect size, so we can return the correct text to display
     RequestClientViewText,
-    UpdateClientView(u16, u16)
+    UpdateClientViewSize(u16, u16),
+    ScrollClientViewDown(usize),
+    ScrollClientViewLeft(usize),
+    ScrollClientViewRight(usize),
+    ScrollClientViewUp(usize),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn Error>>{
         match stream{
             Ok(stream) => {
                 std::thread::spawn(move ||{
-                    handle_client(stream);
+                    let _ = handle_client(stream);
                 });
             }
             Err(e) => {
@@ -48,19 +48,16 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
                 println!("server received: {:#?}", action);
                 
                 // perform requested action, if valid, and generate response
-                match server_action_to_response(action, &mut stream, &mut editor){
-                    Some(response) => {
-                        let serialized_response = ron::to_string(&response)?;
-                        match stream.write(serialized_response.as_bytes()){
-                            Ok(bytes_written) => {
-                                if bytes_written == 0{} else {}
-                            }
-                            Err(e) => {return Err(Box::new(e));}
+                if let Some(response) = server_action_to_response(action, &mut stream, &mut editor){
+                    let serialized_response = ron::to_string(&response)?;
+                    match stream.write(serialized_response.as_bytes()){
+                        Ok(bytes_written) => {
+                            if bytes_written == 0{} else {}
                         }
-                        stream.flush().unwrap();
-                        println!("server emitted: {:#?}", response);
+                        Err(e) => {return Err(Box::new(e));}
                     }
-                    None => {}
+                    stream.flush().unwrap();
+                    println!("server emitted: {:#?}", response);
                 }
             }
             Err(_) => {
@@ -92,7 +89,7 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 }
             }
         },
-        ServerAction::UpdateClientView(width, height) => {
+        ServerAction::UpdateClientViewSize(width, height) => {
             if let Some(doc) = editor.document_mut(){
                 doc.set_client_view_size(width as usize, height as usize);
                 Some(ServerResponse::Acknowledge)
@@ -107,7 +104,38 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 }
                 None => Some(ServerResponse::Failed("no document open".to_string()))
             }
-        }
-        _ => None
+        },
+        ServerAction::ScrollClientViewDown(amount) => {
+            if let Some(doc) = editor.document_mut(){
+                doc.scroll_client_view_down(amount);
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
+        ServerAction::ScrollClientViewLeft(amount) => {
+            if let Some(doc) = editor.document_mut(){
+                doc.scroll_client_view_left(amount);
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
+        ServerAction::ScrollClientViewRight(amount) => {
+            if let Some(doc) = editor.document_mut(){
+                doc.scroll_client_view_right(amount);
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
+        ServerAction::ScrollClientViewUp(amount) => {
+            if let Some(doc) = editor.document_mut(){
+                doc.scroll_client_view_up(amount);
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
     }
 }

@@ -460,6 +460,30 @@ impl Document{
         self.stored_line_position = self.cursor_position().x;
     }
 
+    pub fn scroll_client_view_down(&mut self, amount: usize){
+        if self.client_view.vertical_start + self.client_view.height + amount <= self.len(){
+            self.client_view.vertical_start = self.client_view.vertical_start + amount;
+        }
+    }
+    pub fn scroll_client_view_left(&mut self, amount: usize){
+        self.client_view.horizontal_start = self.client_view.horizontal_start.saturating_sub(amount);
+    }
+    pub fn scroll_client_view_right(&mut self, amount: usize){
+        let mut longest = 0;
+        for line in &self.lines{
+            if line.len() > longest{
+                longest = line.len();
+            }
+        }
+
+        if self.client_view.horizontal_start + self.client_view.width + amount <= longest{
+            self.client_view.horizontal_start = self.client_view.horizontal_start + amount;
+        }
+    }
+    pub fn scroll_client_view_up(&mut self, amount: usize){
+        self.client_view.vertical_start = self.client_view.vertical_start.saturating_sub(amount);
+    }
+
     pub fn collapse_selection_cursors(&mut self){
         self.cursor_head.x = self.stored_line_position;
     }
