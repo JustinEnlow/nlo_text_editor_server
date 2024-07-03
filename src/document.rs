@@ -357,20 +357,28 @@ impl Document{
     }
 
     // would checking returning client view changed bool here allow us to reduce DisplayView server response calls?
-    pub fn scroll_view_following_cursor(&mut self){
+    pub fn scroll_view_following_cursor(&mut self) -> bool{
+        let mut should_update_client_view = false;
+
         if self.cursor_position().y() < self.client_view.vertical_start{
             self.client_view.vertical_start = self.cursor_position().y();
+            should_update_client_view = true;
         }
         else if self.cursor_position().y() >= self.client_view.vertical_start.saturating_add(self.client_view.height){
             self.client_view.vertical_start = self.cursor_position().y().saturating_sub(self.client_view.height).saturating_add(1);
+            should_update_client_view = true;
         }
     
         if self.cursor_position().x() < self.client_view.horizontal_start{
             self.client_view.horizontal_start = self.cursor_position().x();
+            should_update_client_view = true;
         }
         else if self.cursor_position().x() >= self.client_view.horizontal_start.saturating_add(self.client_view.width){
             self.client_view.horizontal_start = self.cursor_position().x().saturating_sub(self.client_view.width).saturating_add(1);
+            should_update_client_view = true;
         }
+
+        should_update_client_view
     }
 
     pub fn move_cursor_up(&mut self){
