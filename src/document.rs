@@ -109,6 +109,25 @@ impl Document{
         self.cursor_anchor
     }
 
+    //TODO: verify functionality
+    pub fn get_client_cursor_position(&self) -> Option<Position>{
+        //only get a cursor position, if the cursor is within view
+        if self.cursor_position().x() >= self.client_view.horizontal_start 
+        && self.cursor_position().x() < (self.client_view.horizontal_start + self.client_view.width){
+            if self.cursor_position().y() >= self.client_view.vertical_start
+            && self.cursor_position().y() < (self.client_view.vertical_start + self.client_view.height){
+                return Some(
+                    Position{
+                        x: self.cursor_position().x() - self.client_view.horizontal_start,
+                        y: self.cursor_position().y() - self.client_view.vertical_start
+                    }
+                );
+            }
+        }
+
+        None
+    }
+
     pub fn lines_as_single_string(&self) -> String{
         let mut lines = String::new();
         for idk in self.lines.clone(){
@@ -337,10 +356,20 @@ impl Document{
         }
     }
 
-    pub fn move_cursor_up(&mut self){
+    pub fn move_cursor_up(&mut self) -> bool{
         self.cursor_anchor.y = self.cursor_position().y.saturating_sub(1);
         self.cursor_head.y = self.cursor_position().y.saturating_sub(1);
         self.clamp_cursor_to_line_end();
+
+        //
+        if self.cursor_position().y() < self.client_view.vertical_start{
+            self.client_view.vertical_start = self.client_view.vertical_start.saturating_sub(1);
+            //TODO: return bool informing that client view will have changed
+            return true;
+        }
+        //
+
+        false
     }
 
     pub fn move_cursor_down(&mut self){
@@ -349,6 +378,12 @@ impl Document{
             self.cursor_head.y = self.cursor_position().y.saturating_add(1);
         }
         self.clamp_cursor_to_line_end();
+
+        //
+        if self.cursor_position().y() >=  self.client_view.vertical_start + self.client_view.height{
+            self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(1);
+        }
+        //
     }
 
     pub fn move_cursor_right(&mut self){

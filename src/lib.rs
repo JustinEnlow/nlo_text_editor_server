@@ -18,6 +18,9 @@ pub enum ServerAction{
     ScrollClientViewLeft(usize),
     ScrollClientViewRight(usize),
     ScrollClientViewUp(usize),
+    RequestClientCursorPosition,
+    MoveCursorDown,
+    MoveCursorUp,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,6 +29,7 @@ pub enum ServerResponse{
     Acknowledge,
     DisplayView(String),
     Failed(String),
+    DisplayClientCursorPosition(Option<Position>),
 }
 
 #[derive(Debug)]
@@ -46,7 +50,7 @@ impl View{
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]
 pub struct Position{
     x: usize,
     y: usize,

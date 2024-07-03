@@ -89,6 +89,7 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 }
             }
         },
+        //TODO: Should this return a display view response?
         ServerAction::UpdateClientViewSize(width, height) => {
             if let Some(doc) = editor.document_mut(){
                 doc.set_client_view_size(width as usize, height as usize);
@@ -132,6 +133,31 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewUp(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_up(amount);
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
+        ServerAction::RequestClientCursorPosition => {
+            if let Some(doc) = editor.document(){
+                let client_cursor_position = doc.get_client_cursor_position();
+                Some(ServerResponse::DisplayClientCursorPosition(client_cursor_position))
+            }else{
+                Some(ServerResponse::DisplayClientCursorPosition(None))
+            }
+        },
+        ServerAction::MoveCursorDown => {
+            if let Some(doc) = editor.document_mut(){
+                doc.move_cursor_down();
+                Some(ServerResponse::Acknowledge)
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        },
+        ServerAction::MoveCursorUp => {
+            if let Some(doc) = editor.document_mut(){
+                let update_client_view = doc.move_cursor_up();
+                //TODO: make better response
                 Some(ServerResponse::Acknowledge)
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
