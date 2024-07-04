@@ -7,7 +7,7 @@
 [x] set up client-server as document viewer with no scrolling or view size changes
 [x] set up client-server as document viewer with changeable view size
 [x] set up client-server as document viewer with scrolling detached from cursor position
-[ ] set up client-server as document viewer with scrolling attached to cursor position
+[x] set up client-server as document viewer with scrolling attached to cursor position
     [ ] move cursor right
     [ ] move cursor left
     [ ] move cursor up

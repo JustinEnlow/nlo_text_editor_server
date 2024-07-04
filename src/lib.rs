@@ -18,7 +18,7 @@ pub enum ServerAction{
     ScrollClientViewLeft(usize),
     ScrollClientViewRight(usize),
     ScrollClientViewUp(usize),
-    RequestClientCursorPosition,
+    //RequestClientCursorPosition,
     MoveCursorDown,
     MoveCursorUp,
     MoveCursorRight,
@@ -31,11 +31,12 @@ pub enum ServerAction{
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerResponse{
+    FileOpened(Option<String>, usize), //(filename, document_length)
     ConnectionSucceeded,
     Acknowledge,
-    DisplayView(String),
-    Failed(String),
-    DisplayClientCursorPosition(Option<Position>),
+    DisplayView(String, Option<Position>, Position), //(content, client_cursor_position, document_cursor_position)
+    Failed(String), //(reason for failure)
+    CursorPosition(Option<Position>, Position), //(client_cursor_position, document_cursor_position)
 }
 
 #[derive(Debug)]
