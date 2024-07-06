@@ -6,7 +6,7 @@ pub mod editor;
 pub mod document;
 
 
-pub const MESSAGE_SIZE: usize = 4096;
+pub const MESSAGE_SIZE: usize = 8192;//4096;
 
 
 

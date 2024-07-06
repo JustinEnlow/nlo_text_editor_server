@@ -60,8 +60,8 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
                     println!("server emitted: {:#?}\n", response);
                 }
             }
-            Err(_) => {
-                println!("An error occurred. Terminating connection with {}", client_address);
+            Err(e) => {
+                println!("An error occurred. Terminating connection with {}. error: {}", client_address, e);
                 //stream.shutdown(std::net::Shutdown::Both).unwrap();
                 break;
             }
