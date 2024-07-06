@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Serialize, Deserialize};
 
 pub mod editor;
@@ -14,7 +16,7 @@ pub enum ServerAction{
     CloseConnection,
     Delete,
     GoTo(usize),
-    OpenFile(String), // (String, View)? i think we need to supply document rect size, so we can return the correct text to display
+    OpenFile(/*String*/PathBuf), // (String, View)? i think we need to supply document rect size, so we can return the correct text to display
     //RequestClientViewText,
     UpdateClientViewSize(u16, u16),
     ScrollClientViewDown(usize),

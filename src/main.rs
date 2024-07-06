@@ -128,7 +128,7 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::OpenFile(file) => {
             // i think we are trying to open files relative to our current(server) directory. CONFIRMED
             //TODO: open file with absolut paths
-            match editor.open_document(&file){
+            match editor.open_document(/*&file*/file.to_str().expect("failed path buf to string")){
                 Ok(_) => {
                     //Some(ServerResponse::Acknowledge)
                     if let Some(doc) = editor.document(){

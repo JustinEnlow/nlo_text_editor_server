@@ -5,6 +5,12 @@ getting started:
     navigate to directory
     cargo install --path .
 
+    run server:
+    $ nlo_text_editor_server
+
+    or run server in background:
+    $ nlo_text_editor_server &
+
     remove ~/.cargo/bin/nlo_text_editor_server when uninstalling/reinstalling
     or cargo uninstall nlo_text_editor_server
 
