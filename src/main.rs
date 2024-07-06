@@ -107,6 +107,24 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
         }
+        ServerAction::GoTo(line_number) => {
+            if let Some(doc) = editor.document_mut(){
+                if doc.go_to(line_number).is_ok(){
+                    let _ = doc.scroll_view_following_cursor();
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(), 
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position(), 
+                        doc.is_modified(),
+                    ))
+                }else{
+                    Some(ServerResponse::Failed("could not go to line number".to_string()))
+                }
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        }
         ServerAction::OpenFile(file) => {
             // i think we are trying to open files relative to our current(server) directory. CONFIRMED
             //TODO: open file with absolut paths
