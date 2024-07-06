@@ -87,6 +87,19 @@ impl Document{
         
     }
 
+    pub fn get_client_view_line_numbers(&self)-> String{
+        let mut client_view_line_numbers = String::new();
+        for (y, _) in self.lines.iter().enumerate(){
+            if y < self.client_view.vertical_start{}
+            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*potential early return*/}
+            else{
+                client_view_line_numbers.push_str(&format!("{} \n", (y+1).to_string()))
+            }
+        }
+
+        client_view_line_numbers
+    }
+
     pub fn file_name(&self) -> Option<String>{
         self.file_name.clone()
     }

@@ -8,15 +8,15 @@
 [x] set up client-server as document viewer with changeable view size
 [x] set up client-server as document viewer with scrolling detached from cursor position
 [x] set up client-server as document viewer with scrolling attached to cursor position
-    [ ] move cursor right
-    [ ] move cursor left
-    [ ] move cursor up
-    [ ] move cursor down
-    [ ] restrict cursor to line start/end
-    [ ] restrict cursor to document start/end
-    [ ] cursor left at line start moves to previous line end if available
-    [ ] cursor right at line end moves to next line start if available
-    [ ] make cursor maintain horizontal position or go to line end when moving up/down
+    [x] move cursor right
+    [x] move cursor left
+    [x] move cursor up
+    [x] move cursor down
+    [x] restrict cursor to line start/end
+    [x] restrict cursor to document start/end
+    [x] cursor left at line start moves to previous line end if available
+    [x] cursor right at line end moves to next line start if available
+    [x] make cursor maintain horizontal position or go to line end when moving up/down
 [ ] set up client-server with editing functionality
     [ ] insert chars
     [ ] remove chars

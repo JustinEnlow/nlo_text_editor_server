@@ -29,6 +29,8 @@ fn main() -> Result<(), Box<dyn Error>>{
 }
     
 fn handle_client(mut stream: TcpStream) -> Result<(), Box<dyn Error>>{
+    //TODO: move editor into main, and handle multiple connections properly. we are starting a new editor session for each tcp connection, which
+    //is exactly what we don't want
     let mut editor = Editor::default();
 
     let client_address = stream.peer_addr().unwrap();
@@ -98,7 +100,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
             if let Some(doc) = editor.document_mut(){
                 doc.set_client_view_size(width as usize, height as usize);
                 let _ = doc.scroll_view_following_cursor();
-                Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                Some(ServerResponse::DisplayView(
+                    doc.get_client_view_text(), 
+                    doc.get_client_view_line_numbers(), 
+                    doc.get_client_cursor_position(), 
+                    doc.cursor_position()
+                ))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -114,7 +121,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewDown(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_down(amount);
-                Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                Some(ServerResponse::DisplayView(
+                    doc.get_client_view_text(), 
+                    doc.get_client_view_line_numbers(),
+                    doc.get_client_cursor_position(), 
+                    doc.cursor_position()
+                ))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -122,7 +134,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewLeft(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_left(amount);
-                Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                Some(ServerResponse::DisplayView(
+                    doc.get_client_view_text(), 
+                    doc.get_client_view_line_numbers(),
+                    doc.get_client_cursor_position(), 
+                    doc.cursor_position()
+                ))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -130,7 +147,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewRight(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_right(amount);
-                Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                Some(ServerResponse::DisplayView(
+                    doc.get_client_view_text(), 
+                    doc.get_client_view_line_numbers(),
+                    doc.get_client_cursor_position(), 
+                    doc.cursor_position()
+                ))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -138,7 +160,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
         ServerAction::ScrollClientViewUp(amount) => {
             if let Some(doc) = editor.document_mut(){
                 doc.scroll_client_view_up(amount);
-                Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                Some(ServerResponse::DisplayView(
+                    doc.get_client_view_text(), 
+                    doc.get_client_view_line_numbers(),
+                    doc.get_client_cursor_position(), 
+                    doc.cursor_position()
+                ))
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -156,7 +183,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_down();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -169,7 +201,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_up();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -182,7 +219,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_right();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -195,7 +237,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_left();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -208,7 +255,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_end();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -221,7 +273,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_home();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -234,7 +291,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_page_down();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }
@@ -247,7 +309,12 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 doc.move_cursor_page_up();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
-                    Some(ServerResponse::DisplayView(doc.get_client_view_text(), doc.get_client_cursor_position(), doc.cursor_position()))
+                    Some(ServerResponse::DisplayView(
+                        doc.get_client_view_text(), 
+                        doc.get_client_view_line_numbers(),
+                        doc.get_client_cursor_position(), 
+                        doc.cursor_position()
+                    ))
                 }else{
                     Some(ServerResponse::CursorPosition(doc.get_client_cursor_position(), doc.cursor_position()))
                 }

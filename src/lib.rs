@@ -34,7 +34,7 @@ pub enum ServerResponse{
     FileOpened(Option<String>, usize), //(filename, document_length)
     ConnectionSucceeded,
     Acknowledge,
-    DisplayView(String, Option<Position>, Position), //(content, client_cursor_position, document_cursor_position)
+    DisplayView(String, String, Option<Position>, Position), //(content, line_numbers, client_cursor_position, document_cursor_position)
     Failed(String), //(reason for failure)
     CursorPosition(Option<Position>, Position), //(client_cursor_position, document_cursor_position)
 }
