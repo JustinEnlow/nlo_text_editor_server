@@ -462,5 +462,25 @@ fn server_action_to_response(action: ServerAction, stream: &mut TcpStream, edito
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
         }
+        ServerAction::Save => {
+            if let Some(doc) = editor.document_mut(){
+                match doc.save(){
+                    Ok(_) => {
+                        Some(ServerResponse::DisplayView(
+                            doc.get_client_view_text(), 
+                            doc.get_client_view_line_numbers(),
+                            doc.get_client_cursor_position(), 
+                            doc.cursor_position(),
+                            doc.is_modified()
+                        ))
+                    }
+                    Err(e) => {
+                        Some(ServerResponse::Failed(format!("failed to save. error: {}", e)))
+                    }
+                }
+            }else{
+                Some(ServerResponse::Failed("no document open".to_string()))
+            }
+        }
     }
 }

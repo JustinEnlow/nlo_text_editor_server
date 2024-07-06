@@ -37,6 +37,7 @@ pub enum ServerAction{
     InserChar(char),
     InsertNewline,
     InsertTab,
+    Save,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
