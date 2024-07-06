@@ -10,7 +10,9 @@ pub const MESSAGE_SIZE: usize = 4096;
 
 #[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub enum ServerAction{
+    Backspace,
     CloseConnection,
+    Delete,
     OpenFile(String), // (String, View)? i think we need to supply document rect size, so we can return the correct text to display
     //RequestClientViewText,
     UpdateClientViewSize(u16, u16),
@@ -19,6 +21,8 @@ pub enum ServerAction{
     ScrollClientViewRight(usize),
     ScrollClientViewUp(usize),
     //RequestClientCursorPosition,
+    MoveCursorDocumentEnd,
+    MoveCursorDocumentStart,
     MoveCursorDown,
     MoveCursorUp,
     MoveCursorRight,
@@ -27,6 +31,9 @@ pub enum ServerAction{
     MoveCursorLineStart,
     MoveCursorPageDown,
     MoveCursorPageUp,
+    InserChar(char),
+    InsertNewline,
+    InsertTab,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,7 +41,7 @@ pub enum ServerResponse{
     FileOpened(Option<String>, usize), //(filename, document_length)
     ConnectionSucceeded,
     Acknowledge,
-    DisplayView(String, String, Option<Position>, Position), //(content, line_numbers, client_cursor_position, document_cursor_position)
+    DisplayView(String, String, Option<Position>, Position, bool), //(content, line_numbers, client_cursor_position, document_cursor_position, modified)
     Failed(String), //(reason for failure)
     CursorPosition(Option<Position>, Position), //(client_cursor_position, document_cursor_position)
 }
