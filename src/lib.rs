@@ -52,6 +52,7 @@ pub enum ServerResponse{
 
 #[derive(Debug)]
 pub struct View{
+    //origin: Position, //instead of horizontal_start and vertical_start?
     horizontal_start: usize,
     vertical_start: usize,
     width: usize,
@@ -74,6 +75,9 @@ pub struct Position{
     y: usize,
 }
 impl Position{
+    pub fn new(x: usize, y: usize) -> Self{
+        Self{x, y}
+    }
     pub fn x(&self) -> usize{
         self.x
     }

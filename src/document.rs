@@ -81,7 +81,6 @@ impl Document{
                 client_view_text.push_str(format!("{}\n", bounded_line).as_str());
             }
         }
-        //client_view_text = "temporary text\n\nsome more text\n\n\n\nend".to_string();
 
         client_view_text
         
@@ -112,6 +111,21 @@ impl Document{
     /// When using cursor_position for line number, use cursor_position.saturating_sub(1). 
     pub fn cursor_position(&self) -> Position{
         self.cursor_head
+    
+    }
+    fn set_cursor_position(&mut self, position: Position){
+        if let Some(line) = self.lines.get(position.y()){
+            if position.x() <= line.graphemes(true).count(){
+                self.cursor_anchor = position;
+                self.cursor_head = position;
+                self.stored_line_position = position.x();
+            }else{
+                let new_pos = Position::new(line.graphemes(true).count(), position.y());
+                self.cursor_anchor = new_pos;
+                self.cursor_head = new_pos;
+                self.stored_line_position = new_pos.x();
+            }
+        }
     }
 
     pub fn _cursor_head(&self) -> Position{
@@ -628,9 +642,10 @@ impl Document{
 
     pub fn go_to(&mut self, line_number: usize) -> Result<(), ()>{
         if line_number < self.len(){
-            self.cursor_head.y = line_number;
-            self.cursor_anchor.y = line_number;
-            self.clamp_cursor_to_line_end();
+            //self.cursor_head.y = line_number;
+            //self.cursor_anchor.y = line_number;
+            //self.clamp_cursor_to_line_end();
+            self.set_cursor_position(Position::new(self.stored_line_position, line_number));
             Ok(())
         }
         else{
@@ -643,43 +658,109 @@ impl Document{
 
 
 
-#[cfg(test)]
-mod tests{
-    use crate::document::Document;
+//#[cfg(test)]
+//mod tests{
+//    use crate::{document::Document, Position};
     
     #[test]
-    fn move_left_cannot_go_before_doc_start(){
+    fn verify_move_cursor_left_behavior(){
         let mut doc = Document::default();
-        doc.move_cursor_left();
+        doc.lines = vec!["123".to_string(), "123".to_string()];
+        
+        let position = Position::new(0, 1);
+        doc.set_cursor_position(position);
+        assert!(doc.cursor_position().y() == 1);
         assert!(doc.cursor_position().x() == 0);
-        assert!(doc._cursor_head().x() == 0);
-        assert!(doc._cursor_anchor().x() == 0);
+        // if at line start, moves cursor to previous line end
+        doc.move_cursor_left();
+        assert!(doc.cursor_position().y() == 0);
+        assert!(doc.cursor_position().x() == 3);
+        // moves cursor left one char within same line
+        doc.move_cursor_left();
+        doc.move_cursor_left();
+        doc.move_cursor_left();
+        assert!(doc.cursor_position().y() == 0);
+        assert!(doc.cursor_position().x() == 0);
+        doc.move_cursor_left();
+        // if at document start, does not move cursor
+        assert!(doc.cursor_position().y() == 0);
+        assert!(doc.cursor_position().x() == 0);
     }
-
     #[test]
-    fn move_up_cannot_go_above_doc_start(){
+    fn verify_move_cursor_up_behavior(){
         let mut doc = Document::default();
+        doc.lines = vec!["1234".to_string(), "1".to_string(), "123".to_string()];
+
+        let position = Position::new(3, 2);
+        doc.set_cursor_position(position);
+        assert!(doc.cursor_position().y() == 2);
+        assert!(doc.cursor_position().x() == 3);
+        // cursor moves up one line, if this line is shorter, cursor moves to line end
+        doc.move_cursor_up();
+        assert!(doc.cursor_position().y() == 1);
+        assert!(doc.cursor_position().x() == 1);
+        // cursor moves up one line, if this line is longer, cursor goes back to stored line position
         doc.move_cursor_up();
         assert!(doc.cursor_position().y() == 0);
-        assert!(doc._cursor_head().y() == 0);
-        assert!(doc._cursor_anchor().y() == 0);
-    }
-
-    #[test]
-    fn move_right_cannot_go_beyond_doc_end(){
-        let mut doc = Document::default();
-        doc.move_cursor_right();
-        assert!(doc.cursor_position().x() == 0);
-        assert!(doc._cursor_head().x() == 0);
-        assert!(doc._cursor_anchor().x() == 0);
-    }
-
-    #[test]
-    fn move_down_cannot_go_below_doc_end(){
-        let mut doc = Document::default();
-        doc.move_cursor_down();
+        assert!(doc.cursor_position().x() == 3);
+        // if at top line, does not move cursor
+        doc.move_cursor_up();
         assert!(doc.cursor_position().y() == 0);
-        assert!(doc._cursor_head().y() == 0);
-        assert!(doc._cursor_anchor().y() == 0);
+        assert!(doc.cursor_position().x() == 3);
     }
-}
+
+    #[test]
+    fn verify_move_cursor_right_behavior(){
+        let mut doc = Document::default();
+        doc.lines = vec!["1".to_string(), "1".to_string()];
+
+        assert!(doc.cursor_position().y() == 0);
+        assert!(doc.cursor_position().x() == 0);
+        // move cursor right one char within same line
+        doc.move_cursor_right();
+        assert!(doc.cursor_position().y() == 0);
+        assert!(doc.cursor_position().x() == 1);
+        // if at line end, move cursor to next line start
+        doc.move_cursor_right();
+        assert!(doc.cursor_position().y() == 1);
+        assert!(doc.cursor_position().x() == 0);
+        // move cursor right one char within same line
+        doc.move_cursor_right();
+        assert!(doc.cursor_position().y() == 1);
+        assert!(doc.cursor_position().x() == 1);
+        // if at doc end, does not move cursor
+        doc.move_cursor_right();
+        assert!(doc.cursor_position().y() == 1);
+        assert!(doc.cursor_position().x() == 1);
+    }
+
+    #[test]
+    fn verify_move_cursor_down_behavior(){
+        let mut doc = Document::default();
+        doc.lines = vec!["123".to_string(), "1".to_string(), "1234".to_string()];
+
+        let position = Position::new(3, 0);
+        doc.set_cursor_position(position);
+        assert!(doc.cursor_position().y() == 0);
+        assert!(doc.cursor_position().x() == 3);
+        // cursor moves down one line, if this line is shorter, cursor moves to line end
+        doc.move_cursor_down();
+        assert!(doc.cursor_position().y() == 1);
+        assert!(doc.cursor_position().x() == 1);
+        // cursor moves down one line, if this line is longer, cursor goes back to stored line position
+        doc.move_cursor_down();
+        assert!(doc.cursor_position().y() == 2);
+        assert!(doc.cursor_position().x() == 3);
+        // if at bottom line, does not move cursor
+        doc.move_cursor_down();
+        assert!(doc.cursor_position().y() == 2);
+        assert!(doc.cursor_position().x() == 3);
+    }
+
+    #[test]
+    fn len_returns_last_line_number(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "some".to_string(), "shit".to_string()];
+        assert!(doc.len() == 3);
+    }
+//}

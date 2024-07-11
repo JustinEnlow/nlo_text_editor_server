@@ -17,14 +17,15 @@
     [x] cursor left at line start moves to previous line end if available
     [x] cursor right at line end moves to next line start if available
     [x] make cursor maintain horizontal position or go to line end when moving up/down
-[ ] set up client-server with editing functionality
-    [ ] insert chars
-    [ ] remove chars
-[ ] set up client-server to save documents
+[x] set up client-server with editing functionality
+    [x] insert chars
+    [x] remove chars
+[x] set up client-server to save documents
 
 
 
 // not in a specific order
+[ ] figure out how to handle proper tabs, instead of inserting spaces
 [ ] set up client-server to handle multiple client connections
 [ ] highlighting for syntax/selections
 [ ] handle multiple cursors

@@ -47,47 +47,47 @@ impl Editor{
 
         Ok(())
     }
-    pub fn close_document(&mut self){
-        if let Some(idx) = self.focused_document_index{
-            self.documents.remove(idx);
-            // reassign focused_document_index if possible
-            if !self.documents.is_empty(){
-                // is there a better way to determine which index to assign here?
-                self.focused_document_index = Some(self.documents.len().saturating_sub(1));
-            }else{
-                self.focused_document_index = None;
-            }
-        }
-    }
-    pub fn increment_focused_document(&mut self){
-        let new_index = match self.focused_document_index{
-            Some(idx) => {
-                // use conditional if we want increment to wrap
-                if self.documents.len() > idx.saturating_add(1){
-                    Some(idx.saturating_add(1))
-                }else{Some(idx)/*Some(0)*/}
-            }
-            None => None
-        };
-        self.focused_document_index = new_index;
-    }
-    pub fn decrement_focused_document(&mut self){
-        let new_index = match self.focused_document_index{
-            Some(idx) => {
-                // use conditional if we want decrement to wrap
-                // if idx.saturating_sub(1) > 0{
-                    Some(idx.saturating_sub(1))
-                //}else{
-                    //Some(self.documents.len().saturating_sub(1)) // sub 1?
-                //}
-            }
-            None => None
-        };
-        self.focused_document_index = new_index;
-    }
-    pub fn focus_document_at_index(&mut self, index: usize){
-        if index < self.documents.len(){
-            self.focused_document_index = Some(index);
-        }
-    }
+    //pub fn close_document(&mut self){
+    //    if let Some(idx) = self.focused_document_index{
+    //        self.documents.remove(idx);
+    //        // reassign focused_document_index if possible
+    //        if !self.documents.is_empty(){
+    //            // is there a better way to determine which index to assign here?
+    //            self.focused_document_index = Some(self.documents.len().saturating_sub(1));
+    //        }else{
+    //            self.focused_document_index = None;
+    //        }
+    //    }
+    //}
+    //pub fn increment_focused_document(&mut self){
+    //    let new_index = match self.focused_document_index{
+    //        Some(idx) => {
+    //            // use conditional if we want increment to wrap
+    //            if self.documents.len() > idx.saturating_add(1){
+    //                Some(idx.saturating_add(1))
+    //            }else{Some(idx)/*Some(0)*/}
+    //        }
+    //        None => None
+    //    };
+    //    self.focused_document_index = new_index;
+    //}
+    //pub fn decrement_focused_document(&mut self){
+    //    let new_index = match self.focused_document_index{
+    //        Some(idx) => {
+    //            // use conditional if we want decrement to wrap
+    //            // if idx.saturating_sub(1) > 0{
+    //                Some(idx.saturating_sub(1))
+    //            //}else{
+    //                //Some(self.documents.len().saturating_sub(1)) // sub 1?
+    //            //}
+    //        }
+    //        None => None
+    //    };
+    //    self.focused_document_index = new_index;
+    //}
+    //pub fn focus_document_at_index(&mut self, index: usize){
+    //    if index < self.documents.len(){
+    //        self.focused_document_index = Some(index);
+    //    }
+    //}
 }
