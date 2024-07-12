@@ -663,6 +663,25 @@ impl Document{
 //    use crate::{document::Document, Position};
     
     #[test]
+    fn verify_set_cursor_position_behavior(){
+        let mut doc = Document::default();
+        doc.lines = vec!["1234".to_string(), "1".to_string(), "123".to_string()];
+
+        // setting y inside doc should work
+        doc.set_cursor_position(Position::new(0, 2));
+        assert!(doc.cursor_position().y() == 2);
+        assert!(doc.cursor_position().x() == 0);
+        // setting y past doc end does nothing
+        doc.set_cursor_position(Position::new(0, 3));
+        assert!(doc.cursor_position().y() == 2);
+        assert!(doc.cursor_position().x() == 0);
+        // setting x past line end should restrict x to line end
+        doc.set_cursor_position(Position::new(4, 2));
+        assert!(doc.cursor_position().y() == 2);
+        assert!(doc.cursor_position().x() == 3);
+    }
+
+    #[test]
     fn verify_move_cursor_left_behavior(){
         let mut doc = Document::default();
         doc.lines = vec!["123".to_string(), "123".to_string()];

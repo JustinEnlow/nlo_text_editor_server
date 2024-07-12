@@ -26,7 +26,7 @@
 
 // not in a specific order
 [ ] figure out how to handle proper tabs, instead of inserting spaces
-[ ] set up client-server to handle multiple client connections
+[x] set up client-server to handle multiple client connections
 [ ] highlighting for syntax/selections
 [ ] handle multiple cursors
 [ ] cursor to line start vs line text start - allow user to decide whether they are separate or if subsequent presses toggle between the two
