@@ -1,5 +1,5 @@
 use crate::document::Document;
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, path::PathBuf};
 
 
 
@@ -28,7 +28,7 @@ impl Editor{
 
         None
     }
-    pub fn open_document(&mut self, path: &str, client_address: &str) -> Result<(), Box<dyn Error>>{
+    pub fn open_document(&mut self, path: &PathBuf, client_address: &str) -> Result<(), Box<dyn Error>>{
         let doc = Document::open(path)?;
         self.documents.insert(client_address.to_string(), doc);
 

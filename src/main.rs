@@ -131,7 +131,7 @@ fn server_action_to_response(action: ServerAction, client_address: &String, edit
             }
         }
         ServerAction::OpenFile{file_path} => {
-            match editor.open_document(file_path.to_str().expect("failed path buf to string"), client_address){
+            match editor.open_document(&file_path, client_address){
                 Ok(_) => {
                     if let Some(doc) = editor.document(client_address){
                         Some(ServerResponse::FileOpened{file_name: doc.file_name(), document_length: doc.len()})

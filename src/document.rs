@@ -1,6 +1,7 @@
 use crate::{Position, View};
 use std::fs;
 use std::io::{Error, Write};
+use std::path::PathBuf;
 use unicode_segmentation::UnicodeSegmentation;
 
 // tab keypress inserts the number of spaces specified in TAB_WIDTH into the focused document
@@ -33,7 +34,7 @@ impl Default for Document{
 impl Document{
     // not sure whether to continue using &str or &Path
     // everything seems to be working fine so far with just &str
-    pub fn open(path: &str) -> Result<Self, std::io::Error>{
+    pub fn open(path: &PathBuf) -> Result<Self, std::io::Error>{
         let file_content = fs::read_to_string(path)?;
         let mut lines = Vec::new();
         if file_content.is_empty(){
@@ -46,7 +47,7 @@ impl Document{
     
         Ok(Self{
             lines,
-            file_name: Some(path.to_string()),
+            file_name: Some(path.to_string_lossy().to_string()),
             modified: false,
             cursor_anchor: Position::default(),
             cursor_head: Position::default(),
