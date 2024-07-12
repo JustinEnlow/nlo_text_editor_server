@@ -30,3 +30,8 @@
 [ ] highlighting for syntax/selections
 [ ] handle multiple cursors
 [ ] cursor to line start vs line text start - allow user to decide whether they are separate or if subsequent presses toggle between the two
+
+
+[ ] fix bug where moving cursor right at edge of screen requires extra keypresses
+[ ] make Cursor struct containing cursor_head and cursor_achor
+[ ] make Vec<Cursor> for holding data for multiple cursor

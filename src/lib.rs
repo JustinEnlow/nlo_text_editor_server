@@ -48,22 +48,12 @@ pub enum ServerResponse{
     CursorPosition{client_cursor_position: Option<Position>, document_cursor_position: Position}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct View{
     horizontal_start: usize,
     vertical_start: usize,
     width: usize,
     height: usize,
-}
-impl View{
-    pub fn default() -> Self{
-        Self {
-            horizontal_start: 0,
-            vertical_start: 0,
-            width: 0,
-            height: 0
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Copy)]

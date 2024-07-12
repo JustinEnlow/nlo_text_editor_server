@@ -32,8 +32,6 @@ impl Default for Document{
     }
 }
 impl Document{
-    // not sure whether to continue using &str or &Path
-    // everything seems to be working fine so far with just &str
     pub fn open(path: &PathBuf) -> Result<Self, std::io::Error>{
         let file_content = fs::read_to_string(path)?;
         let mut lines = Vec::new();
@@ -84,7 +82,6 @@ impl Document{
         }
 
         client_view_text
-        
     }
 
     pub fn get_client_view_line_numbers(&self)-> String{
@@ -93,7 +90,7 @@ impl Document{
             if y < self.client_view.vertical_start{}
             else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*potential early return*/}
             else{
-                client_view_line_numbers.push_str(&format!("{}\n", (y+1).to_string()))
+                client_view_line_numbers.push_str(&format!("{}\n", y.saturating_add(1)))
             }
         }
 
@@ -141,16 +138,15 @@ impl Document{
     pub fn get_client_cursor_position(&self) -> Option<Position>{
         //only get a cursor position, if the cursor is within view
         if self.cursor_position().x() >= self.client_view.horizontal_start 
-        && self.cursor_position().x() < (self.client_view.horizontal_start + self.client_view.width){
-            if self.cursor_position().y() >= self.client_view.vertical_start
-            && self.cursor_position().y() < (self.client_view.vertical_start + self.client_view.height){
-                return Some(
-                    Position{
-                        x: self.cursor_position().x() - self.client_view.horizontal_start,
-                        y: self.cursor_position().y() - self.client_view.vertical_start
-                    }
-                );
-            }
+        && self.cursor_position().x() < (self.client_view.horizontal_start + self.client_view.width)
+        && self.cursor_position().y() >= self.client_view.vertical_start
+        && self.cursor_position().y() < (self.client_view.vertical_start + self.client_view.height){
+            return Some(
+                Position{
+                    x: self.cursor_position().x() - self.client_view.horizontal_start,
+                    y: self.cursor_position().y() - self.client_view.vertical_start
+                }
+            );
         }
 
         None
@@ -164,7 +160,7 @@ impl Document{
         lines
     }
 
-    pub fn current_line(&self) -> &String{
+    pub fn current_line(&self) -> &str{
         match self.lines.get(self.cursor_position().y){
             Some(line) => line,
             None => panic!("No line at cursor position. This should be impossible")
@@ -185,6 +181,9 @@ impl Document{
     // returns the number of lines in this document
     pub fn len(&self) -> usize{
         self.lines.len()
+    }
+    pub fn is_empty(&self) -> bool{
+        self.lines.is_empty()
     }
 
     pub fn get_first_non_whitespace_character_index(&self)-> usize{
@@ -456,12 +455,12 @@ impl Document{
         self.stored_line_position = self.cursor_position().x;
     }
 
-    pub fn move_cursor_page_up(&mut self/*, terminal_height: usize*/){
-        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y >= self.client_view.height/*terminal_height*/{
+    pub fn move_cursor_page_up(&mut self){
+        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y >= self.client_view.height{
             // pages up while still displaying first line from previous page
             (
-                self.cursor_position().y.saturating_sub(self.client_view.height/*terminal_height*/ - 1),
-                self.cursor_position().y.saturating_sub(self.client_view.height/*terminal_height*/ - 1)
+                self.cursor_position().y.saturating_sub(self.client_view.height - 1),
+                self.cursor_position().y.saturating_sub(self.client_view.height - 1)
             )
             // to disregard first line on previous page, and do full page up use:
             /*(
@@ -474,13 +473,13 @@ impl Document{
         self.clamp_cursor_to_line_end();
     }
 
-    pub fn move_cursor_page_down(&mut self/*, terminal_height: usize*/){
+    pub fn move_cursor_page_down(&mut self){
         let document_length = self.len();
-        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y.saturating_add(self.client_view.height/*terminal_height*/) <= document_length{
+        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y.saturating_add(self.client_view.height) <= document_length{
             // pages down while still displaying last line from previous page
             (
-                self.cursor_position().y.saturating_add(self.client_view.height/*terminal_height*/ - 1),
-                self.cursor_position().y.saturating_add(self.client_view.height/*terminal_height*/ - 1)
+                self.cursor_position().y.saturating_add(self.client_view.height - 1),
+                self.cursor_position().y.saturating_add(self.client_view.height - 1)
             )
             // to disregard last line on previous page, and do full page down use:
             /*(
@@ -536,7 +535,7 @@ impl Document{
 
     pub fn scroll_client_view_down(&mut self, amount: usize){
         if self.client_view.vertical_start + self.client_view.height + amount <= self.len(){
-            self.client_view.vertical_start = self.client_view.vertical_start + amount;
+            self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(amount);
         }
     }
     pub fn scroll_client_view_left(&mut self, amount: usize){
@@ -551,7 +550,7 @@ impl Document{
         }
 
         if self.client_view.horizontal_start + self.client_view.width + amount <= longest{
-            self.client_view.horizontal_start = self.client_view.horizontal_start + amount;
+            self.client_view.horizontal_start = self.client_view.horizontal_start.saturating_add(amount);
         }
     }
     pub fn scroll_client_view_up(&mut self, amount: usize){
@@ -641,17 +640,17 @@ impl Document{
         };
     }
 
-    pub fn go_to(&mut self, line_number: usize) -> Result<(), ()>{
+    pub fn go_to(&mut self, line_number: usize){// -> Result<(), ()>{
         if line_number < self.len(){
             //self.cursor_head.y = line_number;
             //self.cursor_anchor.y = line_number;
             //self.clamp_cursor_to_line_end();
             self.set_cursor_position(Position::new(self.stored_line_position, line_number));
-            Ok(())
+            //Ok(())
         }
-        else{
-            Err(())
-        }
+        //else{
+        //    Err(())
+        //}
     }
 }
 

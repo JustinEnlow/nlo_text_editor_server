@@ -3,20 +3,14 @@ use std::{collections::HashMap, error::Error, path::PathBuf};
 
 
 
+#[derive(Default)]
 pub struct Editor{
     documents: HashMap<String, Document>,
-}
-impl Default for Editor{
-    fn default() -> Self {
-        Self{
-            documents: HashMap::new(),
-        }
-    }
 }
 impl Editor{
     pub fn document(&self, client_address: &str) -> Option<&Document>{
         if let Some(doc) = self.documents.get(client_address){
-            return Some(&doc);
+            return Some(doc);
         }
 
         None
@@ -35,7 +29,7 @@ impl Editor{
         Ok(())
     }
     pub fn close_document(&mut self, client_address: &str){
-        if self.documents.get(client_address).is_some(){
+        if self.documents.contains_key(client_address){
             self.documents.remove(client_address);
         }
     }

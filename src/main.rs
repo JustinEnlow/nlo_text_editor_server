@@ -53,8 +53,8 @@ fn handle_client(mut stream: TcpStream, counter: Arc<Mutex<Editor>>) -> Result<(
                 if let Some(response) = server_action_to_response(action, &client_address, &mut editor){
                     let serialized_response = ron::to_string(&response)?;
                     match stream.write(serialized_response.as_bytes()){
-                        Ok(bytes_written) => {
-                            if bytes_written == 0{} else {}
+                        Ok(_bytes_written) => {
+                            //if bytes_written == 0{}else{}
                         }
                         Err(e) => {return Err(Box::new(e));}
                     }
@@ -72,7 +72,7 @@ fn handle_client(mut stream: TcpStream, counter: Arc<Mutex<Editor>>) -> Result<(
     Ok(())
 }
 
-fn server_action_to_response(action: ServerAction, client_address: &String, editor: &mut Editor) -> Option<ServerResponse>{
+fn server_action_to_response(action: ServerAction, client_address: &str, editor: &mut Editor) -> Option<ServerResponse>{
     match action{
         ServerAction::Backspace => {
             if let Some(doc) = editor.document_mut(client_address){
@@ -114,18 +114,19 @@ fn server_action_to_response(action: ServerAction, client_address: &String, edit
         }
         ServerAction::GoTo{line_number} => {
             if let Some(doc) = editor.document_mut(client_address){
-                if doc.go_to(line_number).is_ok(){
-                    let _ = doc.scroll_view_following_cursor();
-                    Some(ServerResponse::DisplayView{
-                        content: doc.get_client_view_text(), 
-                        line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
-                        document_cursor_position: doc.cursor_position(), 
-                        modified: doc.is_modified()
-                    })
-                }else{
-                    Some(ServerResponse::Failed("could not go to line number".to_string()))
-                }
+                //if doc.go_to(line_number).is_ok(){
+                doc.go_to(line_number);
+                let _ = doc.scroll_view_following_cursor();
+                Some(ServerResponse::DisplayView{
+                    content: doc.get_client_view_text(), 
+                    line_numbers: doc.get_client_view_line_numbers(), 
+                    client_cursor_position: doc.get_client_cursor_position(), 
+                    document_cursor_position: doc.cursor_position(), 
+                    modified: doc.is_modified()
+                })
+                //}else{
+                //    Some(ServerResponse::Failed("could not go to line number".to_string()))
+                //}
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -459,7 +460,8 @@ fn server_action_to_response(action: ServerAction, client_address: &String, edit
         }
         ServerAction::InsertNewline => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.insert_newline();
+                //doc.insert_newline();
+                doc.enter();
                 let _ = doc.scroll_view_following_cursor();
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
