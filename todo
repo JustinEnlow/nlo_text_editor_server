@@ -29,9 +29,15 @@
 [x] set up client-server to handle multiple client connections
 [ ] highlighting for syntax/selections
 [ ] handle multiple cursors
+[x] make Cursor struct containing cursor_head and cursor_achor
+[ ] make Vec<Cursor> for holding data for multiple cursor
 [ ] cursor to line start vs line text start - allow user to decide whether they are separate or if subsequent presses toggle between the two
 
 
-[ ] fix bug where moving cursor right at edge of screen requires extra keypresses
-[ ] make Cursor struct containing cursor_head and cursor_achor
-[ ] make Vec<Cursor> for holding data for multiple cursor
+[x] fix bug where moving cursor right at edge of screen requires extra keypresses(seems to be resolved when resize triggered. verify dimensions on first UpdateClientViewSize request)
+    initial: 
+        width: 91, height: 47
+    resized:
+        width: 89, height: 47
+
+    resolved in client side source code

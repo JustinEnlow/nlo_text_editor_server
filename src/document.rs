@@ -9,12 +9,27 @@ pub const TAB_WIDTH: usize = 4;
 
 
 
+#[derive(Default)]
+struct Cursor{
+    anchor: Position,
+    head: Position,
+}
+impl Cursor{
+    pub fn set_both_x(&mut self, x: usize){
+        self.anchor.set_x(x);
+        self.head.set_x(x);
+    }
+    pub fn set_both_y(&mut self, y: usize){
+        self.anchor.set_y(y);
+        self.head.set_y(y);
+    }
+}
 pub struct Document{
     lines: Vec<String>,
-    file_name: Option<String>,
+    file_name: Option<String>, //TODO: should no longer need to be optional. we are enforcing a doc being open in client
     modified: bool,
-    cursor_anchor: Position,
-    cursor_head: Position,
+    //cursors: Vec<Cursor>,
+    cursor: Cursor,
     stored_line_position: usize,
     client_view: View,
 }
@@ -24,8 +39,7 @@ impl Default for Document{
             lines: vec![String::new()],
             file_name: None,
             modified: false,
-            cursor_anchor: Position::default(),
-            cursor_head: Position::default(),
+            cursor: Cursor::default(),
             stored_line_position: 0,
             client_view: View::default(),
         }
@@ -47,8 +61,7 @@ impl Document{
             lines,
             file_name: Some(path.to_string_lossy().to_string()),
             modified: false,
-            cursor_anchor: Position::default(),
-            cursor_head: Position::default(),
+            cursor: Cursor::default(),
             stored_line_position: 0,
             client_view: View::default(),
         })
@@ -108,39 +121,38 @@ impl Document{
     /// When using cursor_position as an index, just use cursor_position. 
     /// When using cursor_position for line number, use cursor_position.saturating_sub(1). 
     pub fn cursor_position(&self) -> Position{
-        self.cursor_head
-    
+        self.cursor.head //TODO: i think this should return anchor instead?
     }
     fn set_cursor_position(&mut self, position: Position){
         if let Some(line) = self.lines.get(position.y()){
             if position.x() <= line.graphemes(true).count(){
-                self.cursor_anchor = position;
-                self.cursor_head = position;
+                self.cursor.anchor = position;
+                self.cursor.head = position;
                 self.stored_line_position = position.x();
             }else{
                 let new_pos = Position::new(line.graphemes(true).count(), position.y());
-                self.cursor_anchor = new_pos;
-                self.cursor_head = new_pos;
+                self.cursor.anchor = new_pos;
+                self.cursor.head = new_pos;
                 self.stored_line_position = new_pos.x();
             }
         }
     }
 
     pub fn _cursor_head(&self) -> Position{
-        self.cursor_head
+        self.cursor.head
     }
 
     pub fn _cursor_anchor(&self) -> Position{
-        self.cursor_anchor
+        self.cursor.anchor
     }
 
     //TODO: verify functionality
+    /// returns Position, if cursor within client view, and None otherwise
     pub fn get_client_cursor_position(&self) -> Option<Position>{
-        //only get a cursor position, if the cursor is within view
         if self.cursor_position().x() >= self.client_view.horizontal_start 
-        && self.cursor_position().x() < (self.client_view.horizontal_start + self.client_view.width)
+        && self.cursor_position().x() < self.client_view.horizontal_start.saturating_add(self.client_view.width)//(self.client_view.horizontal_start + self.client_view.width)
         && self.cursor_position().y() >= self.client_view.vertical_start
-        && self.cursor_position().y() < (self.client_view.vertical_start + self.client_view.height){
+        && self.cursor_position().y() < self.client_view.vertical_start.saturating_add(self.client_view.height){//(self.client_view.vertical_start + self.client_view.height){
             return Some(
                 Position{
                     x: self.cursor_position().x() - self.client_view.horizontal_start,
@@ -243,7 +255,7 @@ impl Document{
         *self.current_line_mut() = new_line;
     }
 
-    pub fn insert_newline(&mut self){
+    fn insert_newline(&mut self){
         self.modified = true;
         
         let line = self.current_line();
@@ -411,15 +423,17 @@ impl Document{
     }
 
     pub fn move_cursor_up(&mut self){
-        self.cursor_anchor.y = self.cursor_position().y.saturating_sub(1);
-        self.cursor_head.y = self.cursor_position().y.saturating_sub(1);
+        //self.cursor.anchor.y = self.cursor_position().y.saturating_sub(1);
+        //self.cursor.head.y = self.cursor_position().y.saturating_sub(1);
+        self.cursor.set_both_y(self.cursor_position().y.saturating_sub(1));
         self.clamp_cursor_to_line_end();
     }
 
     pub fn move_cursor_down(&mut self){
         if self.cursor_position().y.saturating_add(1) < self.len(){
-            self.cursor_anchor.y = self.cursor_position().y.saturating_add(1);
-            self.cursor_head.y = self.cursor_position().y.saturating_add(1);
+            //self.cursor.anchor.y = self.cursor_position().y.saturating_add(1);
+            //self.cursor.head.y = self.cursor_position().y.saturating_add(1);
+            self.cursor.set_both_y(self.cursor_position().y.saturating_add(1));
         }
         self.clamp_cursor_to_line_end();
     }
@@ -427,36 +441,39 @@ impl Document{
     pub fn move_cursor_right(&mut self){
         let line_width = self.current_line().graphemes(true).count();
         if self.cursor_position().x < line_width{
-            self.cursor_anchor.x = self.cursor_position().x.saturating_add(1);
-            self.cursor_head.x = self.cursor_position().x.saturating_add(1);
+            //self.cursor.anchor.x = self.cursor_position().x.saturating_add(1);
+            //self.cursor.head.x = self.cursor_position().x.saturating_add(1);
+            self.cursor.set_both_x(self.cursor_position().x.saturating_add(1));
         }
         else if self.cursor_position().y < self.len().saturating_sub(1){
-            self.cursor_anchor.y = self.cursor_anchor.y.saturating_add(1);
-            self.cursor_head.y = self.cursor_head.y.saturating_add(1);
+            self.cursor.anchor.y = self.cursor.anchor.y.saturating_add(1);
+            self.cursor.head.y = self.cursor.head.y.saturating_add(1);
 
-            self.cursor_anchor.x = 0;
-            self.cursor_head.x = 0;
+            //self.cursor.anchor.x = 0;
+            //self.cursor.head.x = 0;
+            self.cursor.set_both_x(0);
         }
         self.stored_line_position = self.cursor_position().x;
     }
 
     pub fn move_cursor_left(&mut self){
         if self.cursor_position().x > 0{
-            self.cursor_anchor.x = self.cursor_anchor.x.saturating_sub(1);
-            self.cursor_head.x = self.cursor_head.x.saturating_sub(1);
+            self.cursor.anchor.x = self.cursor.anchor.x.saturating_sub(1);
+            self.cursor.head.x = self.cursor.head.x.saturating_sub(1);
         }
         else if self.cursor_position().y > 0{
-            self.cursor_anchor.y = self.cursor_anchor.y.saturating_sub(1);
-            self.cursor_head.y = self.cursor_head.y.saturating_sub(1);
+            self.cursor.anchor.y = self.cursor.anchor.y.saturating_sub(1);
+            self.cursor.head.y = self.cursor.head.y.saturating_sub(1);
 
-            self.cursor_anchor.x = self.current_line().graphemes(true).count();
-            self.cursor_head.x = self.current_line().graphemes(true).count();
+            //self.cursor.anchor.x = self.current_line().graphemes(true).count();
+            //self.cursor.head.x = self.current_line().graphemes(true).count();
+            self.cursor.set_both_x(self.current_line().graphemes(true).count());
         }
         self.stored_line_position = self.cursor_position().x;
     }
 
     pub fn move_cursor_page_up(&mut self){
-        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y >= self.client_view.height{
+        (self.cursor.anchor.y, self.cursor.head.y) = if self.cursor_position().y >= self.client_view.height{
             // pages up while still displaying first line from previous page
             (
                 self.cursor_position().y.saturating_sub(self.client_view.height - 1),
@@ -475,7 +492,7 @@ impl Document{
 
     pub fn move_cursor_page_down(&mut self){
         let document_length = self.len();
-        (self.cursor_anchor.y, self.cursor_head.y) = if self.cursor_position().y.saturating_add(self.client_view.height) <= document_length{
+        (self.cursor.anchor.y, self.cursor.head.y) = if self.cursor_position().y.saturating_add(self.client_view.height) <= document_length{
             // pages down while still displaying last line from previous page
             (
                 self.cursor_position().y.saturating_add(self.client_view.height - 1),
@@ -498,38 +515,44 @@ impl Document{
     pub fn move_cursor_home(&mut self){
         let start_of_line = self.get_first_non_whitespace_character_index();
         if self.cursor_position().x == start_of_line{
-            self.cursor_anchor.x = 0;
-            self.cursor_head.x = 0;
+            //self.cursor.anchor.x = 0;
+            //self.cursor.head.x = 0;
+            self.cursor.set_both_x(0);
         }else{
-            self.cursor_anchor.x = start_of_line;
-            self.cursor_head.x = start_of_line;
+            //self.cursor.anchor.x = start_of_line;
+            //self.cursor.head.x = start_of_line;
+            self.cursor.set_both_x(start_of_line);
         }
         self.stored_line_position = self.cursor_position().x;
     }
 
     pub fn move_cursor_end(&mut self){
         let line_width = self.current_line().graphemes(true).count();
-        self.cursor_anchor.x = line_width;
-        self.cursor_head.x = line_width;
+        //self.cursor.anchor.x = line_width;
+        //self.cursor.head.x = line_width;
+        self.cursor.set_both_x(line_width);
         self.stored_line_position = self.cursor_position().x;
     }
 
     pub fn move_cursor_document_start(&mut self){
-        self.cursor_anchor.x = 0;
-        self.cursor_anchor.y = 0;
-        self.cursor_head.x = 0;
-        self.cursor_head.y = 0;
+        //self.cursor.anchor.x = 0;
+        //self.cursor.anchor.y = 0;
+        //self.cursor.head.x = 0;
+        //self.cursor.head.y = 0;
+        self.cursor = Cursor::default();
         self.stored_line_position = self.cursor_position().x;
     }
 
     pub fn move_cursor_document_end(&mut self){
-        self.cursor_anchor.y = self.len().saturating_sub(1);
-        self.cursor_head.y = self.len().saturating_sub(1);
+        //self.cursor.anchor.y = self.len().saturating_sub(1);
+        //self.cursor.head.y = self.len().saturating_sub(1);
+        self.cursor.set_both_y(self.len().saturating_sub(1));
         
         let line_width = self.current_line().graphemes(true).count();
 
-        self.cursor_anchor.x = line_width;
-        self.cursor_head.x = line_width;
+        //self.cursor.anchor.x = line_width;
+        //self.cursor.head.x = line_width;
+        self.cursor.set_both_x(line_width);
         self.stored_line_position = self.cursor_position().x;
     }
 
@@ -558,58 +581,58 @@ impl Document{
     }
 
     pub fn collapse_selection_cursors(&mut self){
-        self.cursor_head.x = self.stored_line_position;
+        self.cursor.head.x = self.stored_line_position;
     }
 
     pub fn extend_selection_right(&mut self){
         let line_width = self.current_line().graphemes(true).count();
-        if self.cursor_head.x < line_width{
-            self.cursor_head.x = self.cursor_position().x.saturating_add(1);
+        if self.cursor.head.x < line_width{
+            self.cursor.head.x = self.cursor_position().x.saturating_add(1);
         }
-        else if self.cursor_head.y < self.len().saturating_sub(1){
-            self.cursor_head.y = self.cursor_head.y.saturating_add(1);
-            self.cursor_head.x = 0;
+        else if self.cursor.head.y < self.len().saturating_sub(1){
+            self.cursor.head.y = self.cursor.head.y.saturating_add(1);
+            self.cursor.head.x = 0;
         }
-        self.stored_line_position = self.cursor_head.x;
+        self.stored_line_position = self.cursor.head.x;
     }
 
     pub fn extend_selection_left(&mut self){
-        if self.cursor_head.x > 0{
-            self.cursor_head.x = self.cursor_head.x.saturating_sub(1);
+        if self.cursor.head.x > 0{
+            self.cursor.head.x = self.cursor.head.x.saturating_sub(1);
         }
-        else if self.cursor_head.y > 0{
-            self.cursor_head.y = self.cursor_head.y.saturating_sub(1);
-            self.cursor_head.x = self.current_line().graphemes(true).count();
+        else if self.cursor.head.y > 0{
+            self.cursor.head.y = self.cursor.head.y.saturating_sub(1);
+            self.cursor.head.x = self.current_line().graphemes(true).count();
         }
-        self.stored_line_position = self.cursor_head.x;
+        self.stored_line_position = self.cursor.head.x;
     }
 
     pub fn extend_selection_up(&mut self){
-        self.cursor_head.y = self.cursor_head.y.saturating_sub(1);
+        self.cursor.head.y = self.cursor.head.y.saturating_sub(1);
         self.clamp_selection_cursor_to_line_end();
     }
 
     pub fn extend_selection_down(&mut self){
-        if self.cursor_head.y < self.len().saturating_sub(1){
-            self.cursor_head.y = self.cursor_head.y.saturating_add(1);
+        if self.cursor.head.y < self.len().saturating_sub(1){
+            self.cursor.head.y = self.cursor.head.y.saturating_add(1);
         }
         self.clamp_selection_cursor_to_line_end();
     }
 
     pub fn extend_selection_home(&mut self){
         let start_of_line = self.get_first_non_whitespace_character_index();
-        if self.cursor_head.x == start_of_line{
-            self.cursor_head.x = 0;
+        if self.cursor.head.x == start_of_line{
+            self.cursor.head.x = 0;
         }else{
-            self.cursor_head.x = start_of_line;
+            self.cursor.head.x = start_of_line;
         }
-        self.stored_line_position = self.cursor_head.x;
+        self.stored_line_position = self.cursor.head.x;
     }
 
     pub fn extend_selection_end(&mut self){
         let line_width = self.current_line().graphemes(true).count();
-        self.cursor_head.x = line_width;
-        self.stored_line_position = self.cursor_head.x;
+        self.cursor.head.x = line_width;
+        self.stored_line_position = self.cursor.head.x;
     }
 
     pub fn _extend_selection_page_up(&mut self){}
@@ -619,7 +642,7 @@ impl Document{
     fn clamp_cursor_to_line_end(&mut self){
         let line_width = self.current_line().graphemes(true).count();
         
-        (self.cursor_anchor.x, self.cursor_head.x) = if self.cursor_position().x > line_width
+        (self.cursor.anchor.x, self.cursor.head.x) = if self.cursor_position().x > line_width
                                                     || self.stored_line_position > line_width
         {
             (line_width, line_width)
@@ -631,7 +654,7 @@ impl Document{
     fn clamp_selection_cursor_to_line_end(&mut self){
         let line_width = self.current_line().graphemes(true).count();
         
-        self.cursor_head.x = if self.cursor_head.x > line_width 
+        self.cursor.head.x = if self.cursor.head.x > line_width
                             || self.stored_line_position > line_width
         {
             line_width
