@@ -224,9 +224,9 @@ impl Document{
     }
 
     pub fn insert_char(&mut self, c: char){
+        self.modified = true;
+
         for cursor in &self.cursors{
-            self.modified = true;
-        
             let horizontal_index = cursor.head.x;
             
             let line = match self.lines.get_mut(cursor.head.y){
@@ -446,10 +446,6 @@ impl Document{
 
     pub fn move_cursors_left(&mut self){
         for cursor in self.cursors.iter_mut(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
             if cursor.head.x > 0{
                 cursor.anchor.x = cursor.anchor.x.saturating_sub(1);
                 cursor.head.x = cursor.head.x.saturating_sub(1);
@@ -458,6 +454,10 @@ impl Document{
                 cursor.anchor.y = cursor.anchor.y.saturating_sub(1);
                 cursor.head.y = cursor.head.y.saturating_sub(1);
     
+                let line = match self.lines.get(cursor.head.y){
+                    Some(line) => line,
+                    None => panic!("No line at cursor position. This should be impossible")
+                };
                 cursor.set_both_x(line.graphemes(true).count());
             }
             self.stored_line_position = cursor.head.x;
