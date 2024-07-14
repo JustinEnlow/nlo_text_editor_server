@@ -9,12 +9,15 @@ pub const TAB_WIDTH: usize = 4;
 
 
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 struct Cursor{
     anchor: Position,
     head: Position,
 }
 impl Cursor{
+    pub fn new(anchor: Position, head: Position) -> Self{
+        Self{anchor, head}
+    }
     pub fn set_both_x(&mut self, x: usize){
         self.anchor.set_x(x);
         self.head.set_x(x);
@@ -66,45 +69,6 @@ impl Document{
         })
     }
 
-    pub fn set_client_view_size(&mut self, width: usize, height: usize){
-        self.client_view.width = width;
-        self.client_view.height = height;
-    }
-
-    pub fn get_client_view_text(&self) -> String{
-        let mut client_view_text = String::new();
-        for (y, line) in self.lines.iter().enumerate(){
-            let mut bounded_line = String::new();
-            if y < self.client_view.vertical_start{}
-            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*can return early, because we're past our view */}
-            else{
-                for (x, char) in line.chars().enumerate(){
-                    if x < self.client_view.horizontal_start{}
-                    else if x > (self.client_view.width.saturating_sub(1) + self.client_view.horizontal_start){}
-                    else{
-                        bounded_line.push(char);
-                    }
-                }
-                client_view_text.push_str(format!("{}\n", bounded_line).as_str());
-            }
-        }
-
-        client_view_text
-    }
-
-    pub fn get_client_view_line_numbers(&self)-> String{
-        let mut client_view_line_numbers = String::new();
-        for (y, _) in self.lines.iter().enumerate(){
-            if y < self.client_view.vertical_start{}
-            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*potential early return*/}
-            else{
-                client_view_line_numbers.push_str(&format!("{}\n", y.saturating_add(1)))
-            }
-        }
-
-        client_view_line_numbers
-    }
-
     pub fn file_name(&self) -> Option<String>{
         self.file_name.clone()
     }
@@ -144,42 +108,17 @@ impl Document{
         }
     }
 
-    pub fn get_client_cursor_positions(&self) -> Vec<Position>{
-        let mut positions = Vec::new();
-        for cursor in &self.cursors{
-            if cursor.head.x >= self.client_view.horizontal_start
-            && cursor.head.x < self.client_view.horizontal_start.saturating_add(self.client_view.width)
-            && cursor.head.y >= self.client_view.vertical_start
-            && cursor.head.y < self.client_view.vertical_start.saturating_add(self.client_view.height){
-                positions.push(
-                    Position{
-                        x: cursor.head.x.saturating_sub(self.client_view.horizontal_start),
-                        y: cursor.head.y.saturating_sub(self.client_view.vertical_start)
-                    }
-                );
-            } 
-        }
-        positions
+    pub fn add_cursor_on_line_above(&mut self){
+        self.cursors.push(
+            Cursor::new(
+                Position::new(self.cursors.last().unwrap().head.x, self.cursors.last().unwrap().head.y.saturating_sub(1)),
+                Position::new(self.cursors.last().unwrap().head.x, self.cursors.last().unwrap().head.y.saturating_sub(1))
+            )
+        );
+        self.clamp_cursors_to_line_end();
     }
+    pub fn add_cursor_on_line_below(&mut self){
 
-    pub fn lines_as_single_string(&self) -> String{
-        let mut lines = String::new();
-        for idk in self.lines.clone(){
-            lines.push_str(format!("{}\n", idk).as_str())
-        }
-        lines
-    }
-
-    pub fn is_modified(&self) -> bool{
-        self.modified
-    }
-
-    // returns the number of lines in this document
-    pub fn len(&self) -> usize{
-        self.lines.len()
-    }
-    pub fn is_empty(&self) -> bool{
-        self.lines.is_empty()
     }
 
     //fn get_char_at_cursor(&mut self) -> Option<char>{
@@ -194,6 +133,28 @@ impl Document{
     //
     //    char_at_cursor
     //}
+
+    // auto_indent not working well with undo/redo
+    pub fn enter(&mut self){
+        // auto indent doesn't work correctly if previous line has only whitespace characters
+        // also doesn't auto indent for first line of function bodies, because function declaration
+        // is at lower indentation level
+        for cursor in self.cursors.clone(){
+            //let indent_level = self.get_first_non_whitespace_character_index(cursor);
+            let line = match self.lines.get(cursor.head.y){
+                Some(line) => line,
+                None => panic!("No line at cursor position. This should be impossible")
+            };
+            let start_of_line = get_first_non_whitespace_character_index(line);
+            self.insert_newline(&cursor);
+            // auto indent
+            if start_of_line != 0{
+                for _ in 0..start_of_line{
+                    self.insert_char(' ');
+                }
+            }
+        }
+    }
 
     fn insert_newline(&mut self, cursor: &Cursor){
         self.modified = true;
@@ -238,66 +199,6 @@ impl Document{
         self.move_cursors_right();
     }
 
-    pub fn delete(&mut self){
-        let document_length = self.len();
-        for cursor in self.cursors.clone(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-            let cursor_on_last_line = cursor.head.y.saturating_add(1) == document_length;
-            let cursor_at_end_of_line = cursor.head.x == line.graphemes(true).count();
-            match (cursor_on_last_line, cursor_at_end_of_line){
-                (true, true) => {/*do nothing*/}
-                (_, false) => self.delete_next_char(&cursor),
-                (false, true) => self.delete_next_newline(&cursor),
-            }
-        }
-    }
-
-    fn delete_next_char(&mut self, cursor: &Cursor){
-        self.modified = true;
-
-        let line = match self.lines.get_mut(cursor.head.y){
-            Some(line) => line,
-            None => panic!("No line at cursor position. This should be impossible")
-        };
-        let mut result = String::new();
-        for (index, grapheme) in line[..].graphemes(true).enumerate(){
-            if index != cursor.head.x{
-                result.push_str(grapheme);
-            }
-        }
-        *line = result;
-    }
-
-    
-    fn delete_next_newline(&mut self, cursor: &Cursor){
-        self.modified = true;
-
-        let next_line = self.lines.remove(cursor.head.y.saturating_add(1));
-        let line = match self.lines.get_mut(cursor.head.y){
-            Some(line) => line,
-            None => panic!("No line at cursor position. This should be impossible")
-        };
-        *line = format!("{}{}", line, next_line);
-    }
-
-    pub fn save(&mut self) -> Result<(), Error>{
-        if let Some(file_name) = &self.file_name{ // does nothing if file_name is None
-            let mut file = fs::File::create(file_name)?;
-            
-            for line in &self.lines {
-                file.write_all(line.as_bytes())?;
-                file.write_all(b"\n")?;
-            }
-            
-            self.modified = false;
-        }
-        
-        Ok(())
-    }
-
     pub fn tab(&mut self){
         for cursor in self.cursors.clone(){
             let tab_distance = distance_to_next_multiple_of_tab_width(&cursor);
@@ -312,101 +213,93 @@ impl Document{
         }
     }
 
-    // auto_indent not working well with undo/redo
-    pub fn enter(&mut self){
-        // auto indent doesn't work correctly if previous line has only whitespace characters
-        // also doesn't auto indent for first line of function bodies, because function declaration
-        // is at lower indentation level
+    pub fn delete(&mut self){
+        let document_length = self.len();
         for cursor in self.cursors.clone(){
-            //let indent_level = self.get_first_non_whitespace_character_index(cursor);
             let line = match self.lines.get(cursor.head.y){
                 Some(line) => line,
                 None => panic!("No line at cursor position. This should be impossible")
             };
-            let start_of_line = get_first_non_whitespace_character_index(line);
-            self.insert_newline(&cursor);
-            // auto indent
-            if start_of_line != 0{
-                for _ in 0..start_of_line{
-                    self.insert_char(' ');
-                }
+            let cursor_on_last_line = cursor.head.y.saturating_add(1) == document_length;
+            let cursor_at_end_of_line = cursor.head.x == line.graphemes(true).count();
+            match (cursor_on_last_line, cursor_at_end_of_line){
+                (true, true) => {/*do nothing*/}
+                (_, false) => self.delete_next_char(),
+                (false, true) => self.delete_next_newline(),
             }
+        }
+    }
+
+    fn delete_next_char(&mut self){
+        self.modified = true;
+        
+        for cursor in &self.cursors{
+            let line = match self.lines.get_mut(cursor.head.y){
+                Some(line) => line,
+                None => panic!("No line at cursor position. This should be impossible")
+            };
+            if cursor.head.x < line.graphemes(true).count(){
+                line.remove(cursor.head.x);
+            }
+        }
+    }
+
+    fn delete_next_newline(&mut self){
+        self.modified = true;
+        
+        for cursor in &self.cursors{
+            let next_line = self.lines.remove(cursor.head.y.saturating_add(1));
+            let line = match self.lines.get_mut(cursor.head.y){
+                Some(line) => line,
+                None => panic!("No line at cursor position. This should be impossible")
+            };
+            line.push_str(&next_line);
         }
     }
 
     pub fn backspace(&mut self){
         for cursor in self.cursors.clone(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-
             if cursor.head.x >= TAB_WIDTH
             // handles case where user adds a space after a tab, and wants to delete only the space
             && cursor.head.x % TAB_WIDTH == 0
             // if previous 4 chars are spaces, delete 4. otherwise, use default behavior
             && slice_is_all_spaces(
-                line,
+                match self.lines.get(cursor.head.y){
+                    Some(line) => line,
+                    None => panic!("No line at cursor position. This should be impossible")
+                },
                 cursor.head.x - TAB_WIDTH, 
                 cursor.head.x,
             ){
-                self.delete_prev_tab(&cursor);
+                self.delete_prev_tab();
             }
             else if cursor.head.x > 0{
-                self.delete_prev_char(&cursor);
+                self.delete_prev_char();
             }
             else if cursor.head.x == 0 && cursor.head.y > 0{
-                self.delete_prev_newline(&cursor);
+                self.delete_prev_newline();
             }
         }
     }
 
-    fn delete_prev_char(&mut self, cursor: &Cursor){
+    fn delete_prev_char(&mut self){
         self.move_cursors_left();
-        self.delete_next_char(cursor);
+        self.delete_next_char();
     }
 
-    fn delete_prev_newline(&mut self, cursor: &Cursor){
-        while cursor.head.x > 0{
-            self.delete_prev_char(cursor);
-        }
+    fn delete_prev_newline(&mut self){
+        //while cursor.head.x > 0{
+        //    self.delete_prev_char(cursor);
+        //}
         self.move_cursors_left();
-        self.delete_next_newline(cursor);
+        self.delete_next_newline();
     }
 
-    fn delete_prev_tab(&mut self, cursor: &Cursor){
+    fn delete_prev_tab(&mut self){
         for _ in 0..TAB_WIDTH{
             self.move_cursors_left();
-            self.delete_next_char(cursor);
+            self.delete_next_char();
         }
-    }
-
-    pub fn scroll_view_following_cursor(&mut self) -> bool{
-        // following last cursor pushed to cursors vec
-        let cursor = self.cursors.last().expect("No cursor. This should be impossible");
-        //
-
-        let mut should_update_client_view = false;
-
-        if cursor.head.y() < self.client_view.vertical_start{
-            self.client_view.vertical_start = cursor.head.y();
-            should_update_client_view = true;
-        }
-        else if cursor.head.y() >= self.client_view.vertical_start.saturating_add(self.client_view.height){
-            self.client_view.vertical_start = cursor.head.y().saturating_sub(self.client_view.height).saturating_add(1);
-            should_update_client_view = true;
-        }
-    
-        if cursor.head.x() < self.client_view.horizontal_start{
-            self.client_view.horizontal_start = cursor.head.x();
-            should_update_client_view = true;
-        }
-        else if cursor.head.x() >= self.client_view.horizontal_start.saturating_add(self.client_view.width){
-            self.client_view.horizontal_start = cursor.head.x().saturating_sub(self.client_view.width).saturating_add(1);
-            should_update_client_view = true;
-        }
-
-        should_update_client_view
     }
 
     pub fn move_cursors_up(&mut self){
@@ -417,8 +310,11 @@ impl Document{
     }
 
     pub fn move_cursors_down(&mut self){
+        let document_length = self.len();
         for cursor in self.cursors.iter_mut(){
-            cursor.set_both_y(cursor.head.y.saturating_add(1));
+            if cursor.head.y.saturating_add(1) < document_length{
+                cursor.set_both_y(cursor.head.y.saturating_add(1));
+            }
         }
         self.clamp_cursors_to_line_end();
     }
@@ -540,36 +436,6 @@ impl Document{
         }
     }
 
-    pub fn scroll_client_view_down(&mut self, amount: usize){
-        if self.client_view.vertical_start + self.client_view.height + amount <= self.len(){
-            self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(amount);
-        }
-    }
-    pub fn scroll_client_view_left(&mut self, amount: usize){
-        self.client_view.horizontal_start = self.client_view.horizontal_start.saturating_sub(amount);
-    }
-    pub fn scroll_client_view_right(&mut self, amount: usize){
-        let mut longest = 0;
-        for line in &self.lines{
-            if line.len() > longest{
-                longest = line.len();
-            }
-        }
-
-        if self.client_view.horizontal_start + self.client_view.width + amount <= longest{
-            self.client_view.horizontal_start = self.client_view.horizontal_start.saturating_add(amount);
-        }
-    }
-    pub fn scroll_client_view_up(&mut self, amount: usize){
-        self.client_view.vertical_start = self.client_view.vertical_start.saturating_sub(amount);
-    }
-
-    pub fn collapse_selection_cursors(&mut self){
-        for cursor in self.cursors.iter_mut(){
-            cursor.head.x = self.stored_line_position;
-        }
-    }
-
     pub fn extend_selection_right(&mut self){
         let document_length = self.len();
         for cursor in self.cursors.iter_mut(){
@@ -655,6 +521,19 @@ impl Document{
 
     pub fn _extend_selection_page_down(&mut self){}
 
+    pub fn collapse_selection_cursors(&mut self){
+        for cursor in self.cursors.iter_mut(){
+            if cursor.head.y == cursor.anchor.y{
+                cursor.anchor.x = self.stored_line_position;
+                cursor.head.x = self.stored_line_position;
+            }else{
+                cursor.anchor.x = self.stored_line_position;
+                cursor.head.x = self.stored_line_position;
+                cursor.anchor.y = cursor.head.y;
+            }
+        }
+    }
+
     fn clamp_cursors_to_line_end(&mut self){
         for cursor in self.cursors.iter_mut(){
             let line = match self.lines.get(cursor.head.y){
@@ -691,6 +570,21 @@ impl Document{
         }
     }
 
+    pub fn save(&mut self) -> Result<(), Error>{
+        if let Some(file_name) = &self.file_name{ // does nothing if file_name is None
+            let mut file = fs::File::create(file_name)?;
+            
+            for line in &self.lines {
+                file.write_all(line.as_bytes())?;
+                file.write_all(b"\n")?;
+            }
+            
+            self.modified = false;
+        }
+        
+        Ok(())
+    }
+
     pub fn go_to(&mut self, line_number: usize){// -> Result<(), ()>{
         if line_number < self.len(){
             //self.cursor_head.y = line_number;
@@ -702,6 +596,135 @@ impl Document{
         //else{
         //    Err(())
         //}
+    }
+
+    pub fn lines_as_single_string(&self) -> String{
+        let mut lines = String::new();
+        for idk in self.lines.clone(){
+            lines.push_str(format!("{}\n", idk).as_str())
+        }
+        lines
+    }
+
+    pub fn is_modified(&self) -> bool{
+        self.modified
+    }
+
+    // returns the number of lines in this document
+    pub fn len(&self) -> usize{
+        self.lines.len()
+    }
+    pub fn is_empty(&self) -> bool{
+        self.lines.is_empty()
+    }
+
+    pub fn scroll_client_view_down(&mut self, amount: usize){
+        if self.client_view.vertical_start + self.client_view.height + amount <= self.len(){
+            self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(amount);
+        }
+    }
+    pub fn scroll_client_view_left(&mut self, amount: usize){
+        self.client_view.horizontal_start = self.client_view.horizontal_start.saturating_sub(amount);
+    }
+    pub fn scroll_client_view_right(&mut self, amount: usize){
+        let mut longest = 0;
+        for line in &self.lines{
+            if line.len() > longest{
+                longest = line.len();
+            }
+        }
+
+        if self.client_view.horizontal_start + self.client_view.width + amount <= longest{
+            self.client_view.horizontal_start = self.client_view.horizontal_start.saturating_add(amount);
+        }
+    }
+    pub fn scroll_client_view_up(&mut self, amount: usize){
+        self.client_view.vertical_start = self.client_view.vertical_start.saturating_sub(amount);
+    }
+
+    pub fn scroll_view_following_cursor(&mut self) -> bool{
+        // following last cursor pushed to cursors vec
+        let cursor = self.cursors.last().expect("No cursor. This should be impossible");
+        //
+
+        let mut should_update_client_view = false;
+
+        if cursor.head.y() < self.client_view.vertical_start{
+            self.client_view.vertical_start = cursor.head.y();
+            should_update_client_view = true;
+        }
+        else if cursor.head.y() >= self.client_view.vertical_start.saturating_add(self.client_view.height){
+            self.client_view.vertical_start = cursor.head.y().saturating_sub(self.client_view.height).saturating_add(1);
+            should_update_client_view = true;
+        }
+    
+        if cursor.head.x() < self.client_view.horizontal_start{
+            self.client_view.horizontal_start = cursor.head.x();
+            should_update_client_view = true;
+        }
+        else if cursor.head.x() >= self.client_view.horizontal_start.saturating_add(self.client_view.width){
+            self.client_view.horizontal_start = cursor.head.x().saturating_sub(self.client_view.width).saturating_add(1);
+            should_update_client_view = true;
+        }
+
+        should_update_client_view
+    }
+
+    pub fn set_client_view_size(&mut self, width: usize, height: usize){
+        self.client_view.width = width;
+        self.client_view.height = height;
+    }
+
+    pub fn get_client_view_text(&self) -> String{
+        let mut client_view_text = String::new();
+        for (y, line) in self.lines.iter().enumerate(){
+            let mut bounded_line = String::new();
+            if y < self.client_view.vertical_start{}
+            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*can return early, because we're past our view */}
+            else{
+                for (x, char) in line.chars().enumerate(){
+                    if x < self.client_view.horizontal_start{}
+                    else if x > (self.client_view.width.saturating_sub(1) + self.client_view.horizontal_start){}
+                    else{
+                        bounded_line.push(char);
+                    }
+                }
+                client_view_text.push_str(format!("{}\n", bounded_line).as_str());
+            }
+        }
+
+        client_view_text
+    }
+
+    pub fn get_client_view_line_numbers(&self)-> String{
+        let mut client_view_line_numbers = String::new();
+        for (y, _) in self.lines.iter().enumerate(){
+            if y < self.client_view.vertical_start{}
+            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*potential early return*/}
+            else{
+                client_view_line_numbers.push_str(&format!("{}\n", y.saturating_add(1)))
+            }
+        }
+
+        client_view_line_numbers
+    }
+
+    pub fn get_client_cursor_positions(&self) -> Vec<Position>{
+        let mut positions = Vec::new();
+        for cursor in &self.cursors{
+            if cursor.head.x >= self.client_view.horizontal_start
+            && cursor.head.x < self.client_view.horizontal_start.saturating_add(self.client_view.width)
+            && cursor.head.y >= self.client_view.vertical_start
+            && cursor.head.y < self.client_view.vertical_start.saturating_add(self.client_view.height){
+                positions.push(
+                    Position{
+                        x: cursor.head.x.saturating_sub(self.client_view.horizontal_start),
+                        y: cursor.head.y.saturating_sub(self.client_view.vertical_start)
+                    }
+                );
+            } 
+        }
+        positions
     }
 }
 
@@ -744,7 +767,7 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
 //#[cfg(test)]
 //mod tests{
 //    use crate::{document::Document, Position};
-    
+
     #[test]
     fn verify_set_cursor_position_behavior(){
         let mut doc = Document::default();
@@ -764,100 +787,536 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(doc.cursors.last().unwrap().head.x() == 3);
     }
 
+    //add cursor on line above
     #[test]
-    fn verify_move_cursor_left_behavior(){
+    fn add_cursor_on_line_above_works(){
         let mut doc = Document::default();
-        doc.lines = vec!["123".to_string(), "123".to_string()];
-        
-        let position = Position::new(0, 1);
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(9, 1));
+        doc.add_cursor_on_line_above();
+        println!("{:?}", doc.cursors);
+        assert!(doc.cursors[0].head == Position::new(9, 1));
+        assert!(doc.cursors[1].head == Position::new(3, 0));
+    }
+    #[test]
+    fn add_cursor_on_line_above_works_after_adding_cursor_on_line_below(){
+        assert!(false);
+    }
+    //add cursor on line below
+    #[test]
+    fn add_cursor_on_line_below_works(){
+        assert!(false);
+    }
+    #[test]
+    fn add_cursor_on_line_below_works_after_adding_cursor_on_line_above(){
+        assert!(false);
+    }
+
+    //enter
+        //also test auto indent
+    //insert newline
+    #[test]
+    fn insert_newline_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.enter();
+        println!("{:?}", doc.lines);
+        assert!(doc.lines == vec!["".to_string(), "idk".to_string()]);
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+    }
+    #[test]
+    fn auto_indent_works(){
+        assert!(false);
+    }
+    
+    //insert char
+    #[test]
+    fn insert_char_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["dk".to_string()];
+
+        doc.insert_char('i');
+        assert!(doc.lines == vec!["idk".to_string()]);
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    //tab
+    #[test]
+    fn tab_insert_tab_width_spaces(){
+        let mut doc = Document::default();
+
+        doc.tab();
+        let mut exptected_line = String::new();
+        for _ in 0..TAB_WIDTH{
+            exptected_line.push(' ');
+        }
+        assert!(doc.lines == vec![exptected_line]);
+        assert!(doc.cursors.last().unwrap().head.x() == TAB_WIDTH);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    //delete
+        //delete next char
+        //delete next newline
+    #[test]
+    fn delete_removes_character(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.delete();
+        assert!(doc.lines == vec!["dk".to_string()]);
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    #[test]
+    fn delete_at_end_of_line_appends_next_line_to_current(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.delete();
+        assert!(doc.lines == vec!["idksomething".to_string()]);
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    #[test]
+    fn delete_removes_selection(){
+        assert!(false);
+    }
+    
+    //backspace
+        //delete prev char
+        //delete prev newline
+        //delete prev tab
+    #[test]
+    fn backspace_removes_previous_character(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(1, 0));
+        doc.backspace();
+        println!("{:?}", doc.lines);
+        assert!(doc.lines == vec!["dk".to_string()]);
+        println!("{:?}", doc.cursors.last().unwrap().head);
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    #[test]
+    fn backspace_at_start_of_line_appends_current_line_to_end_of_previous_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(0, 1));
+        doc.backspace();
+        println!("{:?}", doc.lines);
+        assert!(doc.lines == vec!["idksomething".to_string()]);
+        println!("{:?}", doc.cursors.last().unwrap().head);
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    #[test]
+    fn backspace_removes_previous_tab(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("something");
+        doc.lines = vec![line];
+
+        doc.set_cursor_position(Position::new(TAB_WIDTH, 0));
+        doc.backspace();
+        println!("{:?}", doc.lines);
+        assert!(doc.lines == vec!["something".to_string()]);
+        println!("{:?}", doc.cursors.last().unwrap().head);
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+    }
+    
+    #[test]
+    fn move_cursor_left_at_document_start_does_not_move_cursor(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.move_cursors_left();
+        assert!(doc.cursors.last().unwrap().head.y == 0);
+        assert!(doc.cursors.last().unwrap().head.x == 0);
+    }
+    #[test]
+    fn move_cursor_left_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(1, 0));
+        assert!(doc.cursors.last().unwrap().head.y == 0);
+        assert!(doc.cursors.last().unwrap().head.x == 1);
+        doc.move_cursors_left();
+        assert!(doc.cursors.last().unwrap().head.y == 0);
+        assert!(doc.cursors.last().unwrap().head.x == 0);
+    }
+    #[test]
+    fn move_cursor_left_at_line_start_moves_cursor_to_previous_line_end(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(0, 1));
+        assert!(doc.cursors.last().unwrap().head.y == 1);
+        assert!(doc.cursors.last().unwrap().head.x == 0);
+        doc.move_cursors_left();
+        assert!(doc.cursors.last().unwrap().head.y == 0);
+        assert!(doc.cursors.last().unwrap().head.x == 3);
+    }
+    
+    #[test]
+    fn move_cursor_up_at_document_start_does_not_move_cursor(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.move_cursors_up();
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+    }
+    #[test]
+    fn move_cursor_up_works_when_moving_to_shorter_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["1".to_string(), "123".to_string()];
+
+        let position = Position::new(3, 1);
         doc.set_cursor_position(position);
         assert!(doc.cursors.last().unwrap().head.y() == 1);
-        assert!(doc.cursors.last().unwrap().head.x() == 0);
-        // if at line start, moves cursor to previous line end
-        doc.move_cursors_left();
-        assert!(doc.cursors.last().unwrap().head.y() == 0);
         assert!(doc.cursors.last().unwrap().head.x() == 3);
-        // moves cursor left one char within same line
-        doc.move_cursors_left();
-        doc.move_cursors_left();
-        doc.move_cursors_left();
+        doc.move_cursors_up();
         assert!(doc.cursors.last().unwrap().head.y() == 0);
-        assert!(doc.cursors.last().unwrap().head.x() == 0);
-        doc.move_cursors_left();
-        // if at document start, does not move cursor
-        assert!(doc.cursors.last().unwrap().head.y() == 0);
-        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
     }
     #[test]
-    fn verify_move_cursor_up_behavior(){
+    fn move_cursor_up_works_when_moving_to_longer_line(){
         let mut doc = Document::default();
-        doc.lines = vec!["1234".to_string(), "1".to_string(), "123".to_string()];
+        doc.lines = vec!["1234".to_string(), "1".to_string()];
 
-        let position = Position::new(3, 2);
+        let position = Position::new(1, 1);
         doc.set_cursor_position(position);
-        assert!(doc.cursors.last().unwrap().head.y() == 2);
-        assert!(doc.cursors.last().unwrap().head.x() == 3);
-        // cursor moves up one line, if this line is shorter, cursor moves to line end
-        doc.move_cursors_up();
         assert!(doc.cursors.last().unwrap().head.y() == 1);
         assert!(doc.cursors.last().unwrap().head.x() == 1);
-        // cursor moves up one line, if this line is longer, cursor goes back to stored line position
         doc.move_cursors_up();
         assert!(doc.cursors.last().unwrap().head.y() == 0);
-        assert!(doc.cursors.last().unwrap().head.x() == 3);
-        // if at top line, does not move cursor
-        doc.move_cursors_up();
-        assert!(doc.cursors.last().unwrap().head.y() == 0);
-        assert!(doc.cursors.last().unwrap().head.x() == 3);
-    }
-
-    #[test]
-    fn verify_move_cursor_right_behavior(){
-        let mut doc = Document::default();
-        doc.lines = vec!["1".to_string(), "1".to_string()];
-
-        assert!(doc.cursors.last().unwrap().head.y() == 0);
-        assert!(doc.cursors.last().unwrap().head.x() == 0);
-        // move cursor right one char within same line
-        doc.move_cursors_right();
-        assert!(doc.cursors.last().unwrap().head.y() == 0);
-        assert!(doc.cursors.last().unwrap().head.x() == 1);
-        // if at line end, move cursor to next line start
-        doc.move_cursors_right();
-        assert!(doc.cursors.last().unwrap().head.y() == 1);
-        assert!(doc.cursors.last().unwrap().head.x() == 0);
-        // move cursor right one char within same line
-        doc.move_cursors_right();
-        assert!(doc.cursors.last().unwrap().head.y() == 1);
-        assert!(doc.cursors.last().unwrap().head.x() == 1);
-        // if at doc end, does not move cursor
-        doc.move_cursors_right();
-        assert!(doc.cursors.last().unwrap().head.y() == 1);
         assert!(doc.cursors.last().unwrap().head.x() == 1);
     }
 
     #[test]
-    fn verify_move_cursor_down_behavior(){
+    fn move_cursor_right_at_document_end_does_not_move_cursor(){
         let mut doc = Document::default();
-        doc.lines = vec!["123".to_string(), "1".to_string(), "1234".to_string()];
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        doc.move_cursors_right();
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+    }
+    #[test]
+    fn move_cursor_right_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.move_cursors_right();
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+    }
+    #[test]
+    fn move_cursor_right_at_line_end_moves_cursor_to_start_of_next_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["1".to_string(), "2".to_string()];
+
+        doc.set_cursor_position(Position::new(1, 0));
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+        doc.move_cursors_right();
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+    }
+
+    #[test]
+    fn move_cursor_down_at_document_end_does_not_move_cursor(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        doc.move_cursors_down();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+    }
+    #[test]
+    fn move_cursor_down_works_when_moving_to_shorter_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["123".to_string(), "1".to_string()];
 
         let position = Position::new(3, 0);
         doc.set_cursor_position(position);
         assert!(doc.cursors.last().unwrap().head.y() == 0);
         assert!(doc.cursors.last().unwrap().head.x() == 3);
-        // cursor moves down one line, if this line is shorter, cursor moves to line end
         doc.move_cursors_down();
         assert!(doc.cursors.last().unwrap().head.y() == 1);
         assert!(doc.cursors.last().unwrap().head.x() == 1);
-        // cursor moves down one line, if this line is longer, cursor goes back to stored line position
-        doc.move_cursors_down();
-        assert!(doc.cursors.last().unwrap().head.y() == 2);
-        assert!(doc.cursors.last().unwrap().head.x() == 3);
-        // if at bottom line, does not move cursor
-        doc.move_cursors_down();
-        assert!(doc.cursors.last().unwrap().head.y() == 2);
-        assert!(doc.cursors.last().unwrap().head.x() == 3);
     }
+    #[test]
+    fn move_cursor_down_works_when_moving_to_longer_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["1".to_string(), "1234".to_string()];
+
+        let position = Position::new(1, 0);
+        doc.set_cursor_position(position);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+        doc.move_cursors_down();
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+    }
+
+    //move cursors page up
+    //move cursors page down
+    //move cursors home
+    //move cursors end
+    //move cursor doc start
+    //move cursor doc end
+
+    //extend selection right
+    #[test]
+    fn extend_selection_right_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.extend_selection_right();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    #[test]
+    fn extend_selection_right_at_end_of_line_wraps_to_next_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.extend_selection_right();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    #[test]
+    fn extend_selection_right_at_document_end_does_not_extend_selection(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.extend_selection_right();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+
+    //extend selection left
+    #[test]
+    fn extend_selection_left_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.extend_selection_left();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 2);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    #[test]
+    fn extend_selection_left_at_start_of_line_wraps_to_previous_line(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(0, 1));
+        doc.extend_selection_left();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 9);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 1);
+    }
+    #[test]
+    fn extend_selection_left_at_document_start_does_not_extend_selection(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.extend_selection_left();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+
+    //extend selection up
+    #[test]
+    fn extend_selection_up_works_when_previous_line_is_shorter(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(9, 1));
+        doc.extend_selection_up();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 9);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 1);
+    }
+    #[test]
+    fn extend_selection_up_works_when_previous_line_is_longer(){
+        let mut doc = Document::default();
+        doc.lines = vec!["something".to_string(), "idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 1));
+        doc.extend_selection_up();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 1);
+    }
+    #[test]
+    fn extend_selection_up_at_document_start_does_not_extend_selection(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.extend_selection_up();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 0);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    
+    //extend selection down
+    #[test]
+    fn extend_selection_down_works_when_next_line_shorter(){
+        let mut doc = Document::default();
+        doc.lines = vec!["something".to_string(), "idk".to_string()];
+
+        doc.set_cursor_position(Position::new(9, 0));
+        doc.extend_selection_down();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 9);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    #[test]
+    fn extend_selection_down_works_when_next_line_longer(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.extend_selection_down();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    #[test]
+    fn extend_selection_down_at_document_end_does_not_extend_selection(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.extend_selection_down();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+    
+    //extend selection home
+    //extend selection end
+    //extend selection page up
+    //extend selection page down
+    
+    //collapse selection cursors
+        //when on same line and head less than anchor
+    #[test]
+    fn collapse_selection_cursors_works_when_on_same_line_and_head_less_than_anchor(){
+        let mut doc = Document::default();
+        doc.lines = vec!["something".to_string()];
+
+        doc.set_cursor_position(Position::new(9, 0));
+        doc.extend_selection_left();
+        doc.collapse_selection_cursors();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 8);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 8);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+        //when on same line and anchor less than head
+    #[test]
+    fn collapse_selection_cursors_works_when_on_same_line_and_anchor_less_than_head(){
+        let mut doc = Document::default();
+        doc.lines = vec!["something".to_string()];
+
+        doc.extend_selection_right();
+        doc.collapse_selection_cursors();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 1);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 1);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+        //when on different lines and head less than anchor
+    #[test]
+    fn collapse_selection_cursors_works_when_on_different_lines_and_head_less_than_anchor(){
+        let mut doc = Document::default();
+        doc.lines = vec!["something".to_string(), "idk".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 1));
+        doc.extend_selection_up();
+        doc.collapse_selection_cursors();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
+    }
+        //when on different lines and anchor less than head
+    #[test]
+    fn collapse_selection_cursors_works_when_on_different_lines_and_anchor_less_than_head(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        doc.set_cursor_position(Position::new(3, 0));
+        doc.extend_selection_down();
+        doc.collapse_selection_cursors();
+        println!("{:?}", doc.cursors.last().unwrap());
+        assert!(doc.cursors.last().unwrap().head.x() == 3);
+        assert!(doc.cursors.last().unwrap().head.y() == 1);
+        assert!(doc.cursors.last().unwrap().anchor.x() == 3);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 1);
+    }
+
+    //clamp cursors to line end (verified in cursor movement tests)
+    //clamp selection cursors to line end (verified in extend selection tests)
+
+    //goto
 
     #[test]
     fn len_returns_last_line_number(){
@@ -865,4 +1324,15 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         doc.lines = vec!["idk".to_string(), "some".to_string(), "shit".to_string()];
         assert!(doc.len() == 3);
     }
+
+    //scroll client view down
+    //scroll client view left
+    //scroll client view right
+    //scroll client view up
+    //scroll view following cursor
+
+    //set client view size (does this need testing?)
+    //get client view text
+    //get client view line numbers
+    //get client cursor positions
 //}
