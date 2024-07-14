@@ -81,7 +81,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -104,7 +104,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -120,7 +120,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -152,7 +152,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -166,7 +166,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -180,7 +180,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -194,7 +194,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -208,7 +208,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -232,13 +232,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -254,13 +254,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -270,19 +270,19 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         }
         ServerAction::MoveCursorDown => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_down();
+                doc.move_cursors_down();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -292,19 +292,19 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorUp => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_up();
+                doc.move_cursors_up();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -314,19 +314,19 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorRight => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_right();
+                doc.move_cursors_right();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -336,19 +336,19 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorLeft => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_left();
+                doc.move_cursors_left();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -364,13 +364,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -386,13 +386,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -408,13 +408,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -424,19 +424,19 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorPageUp => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_page_up();
+                doc.move_cursors_page_up();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
-                        client_cursor_position: doc.get_client_cursor_position(), 
+                        client_cursor_positions: doc.get_client_cursor_positions(), 
                         document_cursor_position: doc.cursor_position()
                     })
                 }
@@ -450,7 +450,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -466,7 +466,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -480,7 +480,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
-                    client_cursor_position: doc.get_client_cursor_position(), 
+                    client_cursor_positions: doc.get_client_cursor_positions(), 
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
@@ -495,7 +495,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         Some(ServerResponse::DisplayView{
                             content: doc.get_client_view_text(), 
                             line_numbers: doc.get_client_view_line_numbers(), 
-                            client_cursor_position: doc.get_client_cursor_position(), 
+                            client_cursor_positions: doc.get_client_cursor_positions(), 
                             document_cursor_position: doc.cursor_position(), 
                             modified: doc.is_modified()
                         })

@@ -43,9 +43,9 @@ pub enum ServerResponse{
     FileOpened{file_name: Option<String>, document_length: usize},
     ConnectionSucceeded,
     Acknowledge,
-    DisplayView{content: String, line_numbers: String, client_cursor_position: Option<Position>, document_cursor_position: Position, modified: bool},
+    DisplayView{content: String, line_numbers: String, client_cursor_positions: Vec<Position>, document_cursor_position: Position, modified: bool},
     Failed(String), //(reason for failure)
-    CursorPosition{client_cursor_position: Option<Position>, document_cursor_position: Position}
+    CursorPosition{client_cursor_positions: Vec<Position>, document_cursor_position: Position}
 }
 
 #[derive(Debug, Default)]
