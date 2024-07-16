@@ -226,7 +226,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         //},
         ServerAction::MoveCursorDocumentEnd => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_document_end();
+                doc.move_cursors_document_end();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
@@ -248,7 +248,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         }
         ServerAction::MoveCursorDocumentStart => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_document_start();
+                doc.move_cursors_document_start();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
@@ -358,7 +358,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorLineEnd => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_end();
+                doc.move_cursors_end();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
@@ -380,7 +380,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorLineStart => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_home();
+                doc.move_cursors_home();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
@@ -446,7 +446,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::InserChar(c) => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.insert_char(c);
+                doc.insert_char_at_cursors(c);
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
