@@ -133,7 +133,7 @@ impl Document{
                 Some(line) => line,
                 None => panic!("No line at cursor position. This should be impossible")
             };
-            //let start_of_line = get_first_non_whitespace_character_index(line);
+            let start_of_line = get_first_non_whitespace_character_index(line);
             let mut modified_current_line: String = String::new();
             let mut new_line: String = String::new();
             for (index, grapheme) in line[..].graphemes(true).enumerate(){
@@ -151,19 +151,14 @@ impl Document{
             };
             *line_at_cursor = modified_current_line;
             self.lines.insert(cursor.head.y.saturating_add(1), new_line);
+            Document::move_cursor_right(cursor, &self.lines);
             // auto indent
-            //if start_of_line != 0{
-            //    let line = match self.lines.get_mut(cursor.head.y){
-            //        Some(line) => line,
-            //        None => panic!("No line at cursor position. This should be impossible")
-            //    };
-            //    for _ in 0..start_of_line{
-            //        //self.insert_char(' ');
-            //        Document::insert_char(' ', cursor, line, document_length, &mut self.stored_line_position, &mut self.modified);
-            //    }
-            //}
+            if start_of_line != 0{
+                for _ in 0..start_of_line{
+                    Document::insert_char(' ', cursor, &mut self.lines, &mut self.modified);
+                }
+            }
         }
-        self.move_cursors_right();
     }
 
     pub fn insert_char_at_cursors(&mut self, c: char){
