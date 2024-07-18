@@ -141,34 +141,31 @@ impl Document{
     // is at lower indentation level
     fn enter_at_cursor(cursor: &mut Cursor, lines: &mut Vec<String>, modified: &mut bool){
         *modified = true;
-        let line = match lines.get(cursor.head.y){
-            Some(line) => line,
+        
+        match lines.get_mut(cursor.head.y){
+            Some(line) => {
+                let start_of_line = get_first_non_whitespace_character_index(line);
+                let mut modified_current_line: String = String::new();
+                let mut new_line: String = String::new();
+                for (index, grapheme) in line[..].graphemes(true).enumerate(){
+                    if index < cursor.head.x{
+                        modified_current_line.push_str(grapheme);
+                    }
+                    else{
+                        new_line.push_str(grapheme);
+                    }
+                }
+                *line = modified_current_line;
+                lines.insert(cursor.head.y.saturating_add(1), new_line);
+                Document::move_cursor_right(cursor, &lines);
+                // auto indent
+                if start_of_line != 0{
+                    for _ in 0..start_of_line{
+                        Document::insert_char_at_cursor(' ', cursor, lines, modified);
+                    }
+                }
+            }
             None => panic!("No line at cursor position. This should be impossible")
-        };
-        let start_of_line = get_first_non_whitespace_character_index(line);
-        let mut modified_current_line: String = String::new();
-        let mut new_line: String = String::new();
-        for (index, grapheme) in line[..].graphemes(true).enumerate(){
-            if index < cursor.head.x{
-                modified_current_line.push_str(grapheme);
-            }
-            else{
-                new_line.push_str(grapheme);
-            }
-        }
-    
-        let line_at_cursor = match lines.get_mut(cursor.head.y){
-            Some(line) => line,
-            None => panic!("No line at cursor position. This should be impossible")
-        };
-        *line_at_cursor = modified_current_line;
-        lines.insert(cursor.head.y.saturating_add(1), new_line);
-        Document::move_cursor_right(cursor, &lines);
-        // auto indent
-        if start_of_line != 0{
-            for _ in 0..start_of_line{
-                Document::insert_char_at_cursor(' ', cursor, lines, modified);
-            }
         }
     }
 
@@ -178,13 +175,15 @@ impl Document{
         }
     }
     fn insert_char_at_cursor(c: char, cursor: &mut Cursor, lines: &mut Vec<String>, modified: &mut bool){
-        let line = match lines.get_mut(cursor.head.y){
-            Some(line) => line,
+        *modified = true;
+        
+        match lines.get_mut(cursor.head.y){
+            Some(line) => {
+                line.insert(cursor.head.x, c);
+                Document::move_cursor_right(cursor, &lines);
+            }
             None => panic!("No line at cursor position. This should be impossible")
         };
-        *modified = true;
-        line.insert(cursor.head.x, c);
-        Document::move_cursor_right(cursor, &lines);
     }
 
     pub fn tab(&mut self){
@@ -210,37 +209,43 @@ impl Document{
         }
     }
     fn delete_at_cursor(cursor: &mut Cursor, lines: &mut Vec<String>, modified: &mut bool){
-        let document_length = lines.len();
         *modified = true;
+        
         if cursor.head.x == cursor.anchor.x && cursor.head.y == cursor.anchor.y{
-            let line = match lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-            let cursor_on_last_line = cursor.head.y.saturating_add(1) == document_length;
-            let cursor_at_end_of_line = cursor.head.x == line.graphemes(true).count();
-            match (cursor_on_last_line, cursor_at_end_of_line){
+            match (Document::cursor_on_last_line(cursor, lines), Document::cursor_at_end_of_line(cursor, lines)){
                 (true, true) => {/*do nothing*/}
                 (_, false) => {
-                    let line = match lines.get_mut(cursor.head.y){
-                        Some(line) => line,
+                    match lines.get_mut(cursor.head.y){
+                        Some(line) => {
+                            if cursor.head.x < line.graphemes(true).count(){
+                                line.remove(cursor.head.x);
+                            }
+                        }
                         None => panic!("No line at cursor position. This should be impossible")
                     };
-                    if cursor.head.x < line.graphemes(true).count(){
-                        line.remove(cursor.head.x);
-                    }
                 }
                 (false, true) => {
                     let next_line = lines.remove(cursor.head.y.saturating_add(1));
-                    let line = match lines.get_mut(cursor.head.y){
-                        Some(line) => line,
+                    match lines.get_mut(cursor.head.y){
+                        Some(line) => {
+                            line.push_str(&next_line);
+                        }
                         None => panic!("No line at cursor position. This should be impossible")
                     };
-                    line.push_str(&next_line);
                 }
             }
         }else{
             // delete selection
+        }
+    }
+
+    fn cursor_on_last_line(cursor: &Cursor, lines: &Vec<String>) -> bool{
+        cursor.head.y.saturating_add(1) == lines.len()
+    }
+    fn cursor_at_end_of_line(cursor: &Cursor, lines: &Vec<String>) -> bool{
+        match lines.get(cursor.head.y){
+            Some(line) => cursor.head.x == line.graphemes(true).count(),
+            None => panic!("No line at cursor position. This should be impossible")
         }
     }
 
@@ -306,24 +311,21 @@ impl Document{
         }
     }
     fn move_cursor_right(cursor: &mut Cursor, lines: &Vec<String>){
-        let document_length = lines.len();
-        let line = match lines.get(cursor.head.y){
-            Some(line) => line,
-            None => panic!("No line at cursor position. This should be impossible")
-        };
-        let line_width = line.graphemes(true).count();
-
-        if cursor.head.x < line_width{
-            cursor.set_both_x(cursor.head.x.saturating_add(1));
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                if cursor.head.x < line.graphemes(true).count(){
+                    cursor.set_both_x(cursor.head.x.saturating_add(1));
+                }
+                //move cursor to next line start
+                else if cursor.head.y < lines.len().saturating_sub(1){
+                    cursor.anchor.y = cursor.anchor.y.saturating_add(1);
+                    cursor.head.y = cursor.head.y.saturating_add(1);
+                    cursor.set_both_x(0);
+                }
+                cursor.stored_line_position = cursor.head.x;
+            }
+            None => panic!("No line at cursor position. This should be impossible.")
         }
-        //move cursor to next line start
-        else if cursor.head.y < document_length.saturating_sub(1){
-            cursor.anchor.y = cursor.anchor.y.saturating_add(1);
-            cursor.head.y = cursor.head.y.saturating_add(1);
-
-            cursor.set_both_x(0);
-        }
-        cursor.stored_line_position = cursor.head.x;
     }
 
     pub fn move_cursors_left(&mut self){
@@ -341,95 +343,131 @@ impl Document{
             cursor.anchor.y = cursor.anchor.y.saturating_sub(1);
             cursor.head.y = cursor.head.y.saturating_sub(1);
 
-            let line = match lines.get(cursor.head.y){
-                Some(line) => line,
+            match lines.get(cursor.head.y){
+                Some(line) => {
+                    cursor.set_both_x(line.graphemes(true).count());
+                }
                 None => panic!("No line at cursor position. This should be impossible")
             };
-            cursor.set_both_x(line.graphemes(true).count());
         }
         cursor.stored_line_position = cursor.head.x;
     }
 
     pub fn move_cursors_page_up(&mut self){
         for cursor in self.cursors.iter_mut(){
-            cursor.set_both_y(
-                if cursor.head.y >= self.client_view.height{
-                    cursor.head.y.saturating_sub(self.client_view.height - 1)
-                }else{0}
-            );
-            Document::clamp_cursor_to_line_end(cursor, &self.lines);
+            //cursor.set_both_y(
+            //    if cursor.head.y >= self.client_view.height{
+            //        cursor.head.y.saturating_sub(self.client_view.height - 1)
+            //    }else{0}
+            //);
+            //Document::clamp_cursor_to_line_end(cursor, &self.lines);
+            Document::move_cursor_page_up(cursor, &self.client_view, &self.lines);
         }
     }
+    fn move_cursor_page_up(cursor: &mut Cursor, client_view: &View, lines: &Vec<String>){
+        cursor.set_both_y(
+            if cursor.head.y >= client_view.height{
+                cursor.head.y.saturating_sub(client_view.height - 1)
+            }else{0}
+        );
+        Document::clamp_cursor_to_line_end(cursor, lines);
+    }
 
-    pub fn move_cursor_page_down(&mut self){
-        let document_length = self.len();
+    pub fn move_cursors_page_down(&mut self){
+        //let document_length = self.lines.len();
         for cursor in self.cursors.iter_mut(){
-            cursor.set_both_y(
-                if cursor.head.y.saturating_add(self.client_view.height) <= document_length{
-                    cursor.head.y.saturating_add(self.client_view.height - 1)
-                }else{
-                    document_length.saturating_sub(1)
-                }
-            );
-            Document::clamp_cursor_to_line_end(cursor, &self.lines);
+            //cursor.set_both_y(
+            //    if cursor.head.y.saturating_add(self.client_view.height) <= document_length{
+            //        cursor.head.y.saturating_add(self.client_view.height - 1)
+            //    }else{
+            //        document_length.saturating_sub(1)
+            //    }
+            //);
+            //Document::clamp_cursor_to_line_end(cursor, &self.lines);
+            Document::move_cursor_page_down(cursor, &self.client_view, &self.lines);
         }
+    }
+    fn move_cursor_page_down(cursor: &mut Cursor, client_view: &View, lines: &Vec<String>){
+        let document_length = lines.len();
+        cursor.set_both_y(
+            if cursor.head.y.saturating_add(client_view.height) <= document_length{
+                cursor.head.y.saturating_add(client_view.height - 1)
+            }else{
+                document_length.saturating_sub(1)
+            }
+        );
+        Document::clamp_cursor_to_line_end(cursor, lines);
     }
 
     pub fn move_cursors_home(&mut self){
         for cursor in self.cursors.iter_mut(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-            let start_of_line = get_first_non_whitespace_character_index(line);
-            if cursor.head.x == start_of_line{
-                cursor.set_both_x(0);
-            }else{
-                cursor.set_both_x(start_of_line);
+            Document::move_cursor_home(cursor, &self.lines);
+        }
+    }
+    fn move_cursor_home(cursor: &mut Cursor, lines: &Vec<String>){
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let start_of_line = get_first_non_whitespace_character_index(line);
+                if cursor.head.x == start_of_line{
+                    cursor.set_both_x(0);
+                }else{
+                    cursor.set_both_x(start_of_line);
+                }
+                cursor.stored_line_position = cursor.head.x;
             }
-            cursor.stored_line_position = cursor.head.x;
+            None => panic!("No line at cursor position. This should be impossible")
         }
     }
 
     pub fn move_cursors_end(&mut self){
         for cursor in self.cursors.iter_mut(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-            let line_width = line.graphemes(true).count();
-            cursor.set_both_x(line_width);
-            cursor.stored_line_position = cursor.head.x;
+            Document::move_cursor_end(cursor, &self.lines);
         }
+    }
+    fn move_cursor_end(cursor: &mut Cursor, lines: &Vec<String>){
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let line_width = line.graphemes(true).count();
+                cursor.set_both_x(line_width);
+                cursor.stored_line_position = cursor.head.x;
+            }
+            None => panic!("No line at cursor position. This should be impossible")
+        };
     }
 
     pub fn move_cursors_document_start(&mut self){
         Document::clear_cursors_except_main(&mut self.cursors);
         match self.cursors.get_mut(0){
             Some(cursor) => {
-                *cursor = Cursor::default();
-                cursor.stored_line_position = cursor.head.x;
+                Document::move_cursor_document_start(cursor);
             }
             None => panic!("No cursor at 0 index. This should be impossible.")
         }
     }
+    fn move_cursor_document_start(cursor: &mut Cursor){
+        *cursor = Cursor::default();
+        cursor.stored_line_position = cursor.head.x;
+    }
 
     pub fn move_cursors_document_end(&mut self){
         Document::clear_cursors_except_main(&mut self.cursors);
-        let document_length = self.len();
         match self.cursors.get_mut(0){
             Some(cursor) => {
-                cursor.set_both_y(document_length.saturating_sub(1));
-                let line = match self.lines.get(cursor.head.y){
-                    Some(line) => line,
-                    None => panic!("No line at cursor position. This should be impossible.")
-                };
+                Document::move_cursor_document_end(cursor, &self.lines);
+            }
+            None => panic!("No cursor at 0 index. This should be impossible.")
+        }
+    }
+    fn move_cursor_document_end(cursor: &mut Cursor, lines: &Vec<String>){
+        cursor.set_both_y(lines.len().saturating_sub(1));
+        match lines.get(cursor.head.y){
+            Some(line) => {
                 let line_width = line.graphemes(true).count();
                 cursor.set_both_x(line_width);
                 cursor.stored_line_position = cursor.head.x;
             }
-            None => panic!("No cursor at 0 index. This should be impossible.")
-        }
+            None => panic!("No line at cursor position. This should be impossible.")
+        };
     }
 
     pub fn extend_selection_right(&mut self){
@@ -438,19 +476,20 @@ impl Document{
         }
     }
     fn extend_selection_right_at_cursor(cursor: &mut Cursor, lines: &Vec<String>){
-        let line = match lines.get(cursor.head.y){
-            Some(line) => line,
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let line_width = line.graphemes(true).count();
+                if cursor.head.x < line_width{
+                    cursor.head.x = cursor.head.x.saturating_add(1);
+                }
+                else if cursor.head.y < lines.len().saturating_sub(1){
+                    cursor.head.y = cursor.head.y.saturating_add(1);
+                    cursor.head.x = 0;
+                }
+                cursor.stored_line_position = cursor.head.x;
+            }
             None => panic!("No line at cursor position. This should be impossible")
         };
-        let line_width = line.graphemes(true).count();
-        if cursor.head.x < line_width{
-            cursor.head.x = cursor.head.x.saturating_add(1);
-        }
-        else if cursor.head.y < lines.len().saturating_sub(1){
-            cursor.head.y = cursor.head.y.saturating_add(1);
-            cursor.head.x = 0;
-        }
-        cursor.stored_line_position = cursor.head.x;
     }
 
     pub fn extend_selection_left(&mut self){
@@ -459,18 +498,19 @@ impl Document{
         }
     }
     fn extend_selection_left_at_cursor(cursor: &mut Cursor, lines: &Vec<String>){
-        let line = match lines.get(cursor.head.y){
-            Some(line) => line,
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                if cursor.head.x > 0{
+                    cursor.head.x = cursor.head.x.saturating_sub(1);
+                }
+                else if cursor.head.y > 0{
+                    cursor.head.y = cursor.head.y.saturating_sub(1);
+                    cursor.head.x = line.graphemes(true).count()
+                }
+                cursor.stored_line_position = cursor.head.x;
+            }
             None => panic!("No line at cursor position. This should be impossible")
         };
-        if cursor.head.x > 0{
-            cursor.head.x = cursor.head.x.saturating_sub(1);
-        }
-        else if cursor.head.y > 0{
-            cursor.head.y = cursor.head.y.saturating_sub(1);
-            cursor.head.x = line.graphemes(true).count()
-        }
-        cursor.stored_line_position = cursor.head.x;
     }
 
     pub fn extend_selection_up(&mut self){
@@ -497,30 +537,38 @@ impl Document{
 
     pub fn extend_selection_home(&mut self){
         for cursor in self.cursors.iter_mut(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-            let start_of_line = get_first_non_whitespace_character_index(line);
-            if cursor.head.x == start_of_line{
-                cursor.head.x = 0;
-            }else{
-                cursor.head.x = start_of_line;
-            }
-            cursor.stored_line_position = cursor.head.x;
+            Document::extend_selection_home_at_cursor(cursor, &self.lines);
         }
+    }
+    fn extend_selection_home_at_cursor(cursor: &mut Cursor, lines: &Vec<String>){
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let start_of_line = get_first_non_whitespace_character_index(line);
+                if cursor.head.x == start_of_line{
+                    cursor.head.x = 0;
+                }else{
+                    cursor.head.x = start_of_line;
+                }
+                cursor.stored_line_position = cursor.head.x;
+            }
+            None => panic!("No line at cursor position. This should be impossible")
+        };
     }
 
     pub fn extend_selection_end(&mut self){
         for cursor in self.cursors.iter_mut(){
-            let line = match self.lines.get(cursor.head.y){
-                Some(line) => line,
-                None => panic!("No line at cursor position. This should be impossible")
-            };
-            let line_width = line.graphemes(true).count();
-            cursor.head.x = line_width;
-            cursor.stored_line_position = cursor.head.x;
+            Document::extend_selection_end_at_cursor(cursor, &self.lines);
         }
+    }
+    fn extend_selection_end_at_cursor(cursor: &mut Cursor, lines: &Vec<String>){
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let line_width = line.graphemes(true).count();
+                cursor.head.x = line_width;
+                cursor.stored_line_position = cursor.head.x;
+            }
+            None => panic!("No line at cursor position. This should be impossible")
+        };
     }
 
     pub fn _extend_selection_page_up(&mut self){}
@@ -544,33 +592,34 @@ impl Document{
     }
 
     fn clamp_cursor_to_line_end(cursor: &mut Cursor, lines: &Vec<String>){
-        let line = match lines.get(cursor.head.y){
-            Some(line) => line,
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let line_width = line.graphemes(true).count();
+                cursor.set_both_x(
+                    if cursor.head.x > line_width 
+                    || cursor.stored_line_position > line_width{
+                        line_width
+                    }else{
+                        cursor.stored_line_position
+                    }
+                );
+            }
             None => panic!("No line at cursor position. This should be impossible")
         };
-        let line_width = line.graphemes(true).count();
-        cursor.set_both_x(
-            if cursor.head.x > line_width || cursor.stored_line_position > line_width{
-                line_width
-            }else{
-                cursor.stored_line_position
-            }
-        );
     }
 
     fn clamp_selection_cursor_to_line_end(cursor: &mut Cursor, lines: &Vec<String>){
-        let line = match lines.get(cursor.head.y){
-            Some(line) => line,
+        match lines.get(cursor.head.y){
+            Some(line) => {
+                let line_width = line.graphemes(true).count();
+                if cursor.head.x > line_width
+                || cursor.stored_line_position > line_width{
+                    cursor.head.x = line_width;
+                }else{
+                    cursor.head.x = cursor.stored_line_position;
+                }
+            }
             None => panic!("No line at cursor position. This should be impossible")
-        };
-        let line_width = line.graphemes(true).count();
-        
-        cursor.head.x = if cursor.head.x > line_width
-                        || cursor.stored_line_position > line_width
-        {
-            line_width
-        }else{
-            cursor.stored_line_position
         };
     }
 
@@ -591,18 +640,18 @@ impl Document{
 
     pub fn go_to(&mut self, line_number: usize){// -> Result<(), ()>{
         Document::clear_cursors_except_main(&mut self.cursors);
-        let document_length = self.len();
         match self.cursors.get_mut(0){
             Some(cursor) => {
-                if line_number < document_length{
-                    //cursor.head.y = line_number;
-                    //cursor.anchor.y = line_number;
-                    //Document::clamp_cursor_to_line_end(cursor, &self.lines);
+                if line_number < self.lines.len(){
                     Document::set_cursor_position(cursor, Position::new(cursor.stored_line_position, line_number), &self.lines);
                 }
             }
             None => panic!("No cursor at 0 index. This should be impossible.")
         }
+    }
+
+    pub fn lines(&self) -> &Vec<String>{
+        &self.lines
     }
 
     pub fn lines_as_single_string(&self) -> String{
@@ -617,16 +666,8 @@ impl Document{
         self.modified
     }
 
-    // returns the number of lines in this document
-    pub fn len(&self) -> usize{
-        self.lines.len()
-    }
-    pub fn is_empty(&self) -> bool{
-        self.lines.is_empty()
-    }
-
     pub fn scroll_client_view_down(&mut self, amount: usize){
-        if self.client_view.vertical_start + self.client_view.height + amount <= self.len(){
+        if self.client_view.vertical_start + self.client_view.height + amount <= self.lines.len(){
             self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(amount);
         }
     }
@@ -1138,12 +1179,124 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(cursor.head.x() == 1);
     }
 
-    //move cursors page up
-    //move cursors page down
-    //move cursors home
-    //move cursors end
-    //move cursor doc start
-    //move cursor doc end
+//move cursors page up
+    #[test]
+    fn single_cursor_move_cursor_page_up_works(){
+        assert!(false);
+    }
+//move cursors page down
+    #[test]
+    fn single_cursor_move_cursor_page_down_works(){
+        assert!(false);
+    }
+
+//MOVE CURSOR HOME
+    #[test]
+    fn single_cursor_move_cursor_home_moves_cursor_to_text_start_when_cursor_past_text_start(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("idk");
+        doc.lines = vec![line];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        let position = Position::new(TAB_WIDTH + 2, 0);
+        Document::set_cursor_position(cursor, position, &doc.lines);
+        Document::move_cursor_home(cursor, &doc.lines);
+        assert!(cursor.head.x == TAB_WIDTH);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == TAB_WIDTH);
+        assert!(cursor.anchor.y == 0);
+    }
+    #[test]
+    fn single_cursor_move_cursor_home_moves_cursor_to_line_start_when_cursor_at_text_start(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("idk");
+        doc.lines = vec![line];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        let position = Position::new(TAB_WIDTH, 0);
+        Document::set_cursor_position(cursor, position, &doc.lines);
+        assert!(cursor.head.x == TAB_WIDTH);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == TAB_WIDTH);
+        assert!(cursor.anchor.y == 0);
+        Document::move_cursor_home(cursor, &doc.lines);
+        assert!(cursor.head.x == 0);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == 0);
+        assert!(cursor.anchor.y == 0);
+    }
+    #[test]
+    fn single_cursor_move_cursor_home_moves_cursor_to_text_start_when_cursor_at_line_start(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("idk");
+        doc.lines = vec![line];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        Document::move_cursor_home(cursor, &doc.lines);
+        assert!(cursor.head.x == TAB_WIDTH);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == TAB_WIDTH);
+        assert!(cursor.anchor.y == 0);
+    }
+
+//MOVE CURSOR END
+    #[test]
+    fn single_cursor_move_cursor_end_moves_cursor_to_line_end(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        Document::move_cursor_end(cursor, &doc.lines);
+        assert!(cursor.head.x == 3);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == 3);
+        assert!(cursor.anchor.y == 0);
+    }
+
+//MOVE CURSOR DOC START
+    #[test]
+    fn single_cursor_move_cursor_doc_start_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        let position = Position::new(9, 1);
+        Document::set_cursor_position(cursor, position, &doc.lines);
+        assert!(cursor.head.x == 9);
+        assert!(cursor.head.y == 1);
+        assert!(cursor.anchor.x == 9);
+        assert!(cursor.anchor.y == 1);
+        Document::move_cursor_document_start(cursor);
+        assert!(cursor.head.x == 0);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == 0);
+        assert!(cursor.anchor.y == 0);
+    }
+//MOVE CURSOR DOC END
+    #[test]
+    fn single_cursor_move_cursor_doc_end_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string(), "something".to_string()];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        Document::move_cursor_document_end(cursor, &doc.lines);
+        assert!(cursor.head.x == 9);
+        assert!(cursor.head.y == 1);
+        assert!(cursor.anchor.x == 9);
+        assert!(cursor.anchor.y == 1);
+    }
 
 //EXTEND SELECTION RIGHT
     #[test]
@@ -1327,13 +1480,86 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(cursor.anchor.y() == 0);
     }
     
-    //extend selection home
-    //extend selection end
-    //extend selection page up
-    //extend selection page down
+//EXTEND SELECTION HOME
+    #[test]
+    fn single_cursor_extend_selection_home_moves_cursor_head_to_text_start_when_cursor_past_text_start(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("idk");
+        doc.lines = vec![line];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        let position = Position::new(TAB_WIDTH + 2, 0);
+        Document::set_cursor_position(cursor, position, &doc.lines);
+        Document::extend_selection_home_at_cursor(cursor, &doc.lines);
+        assert!(cursor.head.x == TAB_WIDTH);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == TAB_WIDTH + 2);
+        assert!(cursor.anchor.y == 0);
+    }
+    #[test]
+    fn single_cursor_extend_selection_home_moves_cursor_head_to_line_start_when_cursor_at_text_start(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("idk");
+        doc.lines = vec![line];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        let position = Position::new(TAB_WIDTH, 0);
+        Document::set_cursor_position(cursor, position, &doc.lines);
+        assert!(cursor.head.x == TAB_WIDTH);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == TAB_WIDTH);
+        assert!(cursor.anchor.y == 0);
+        Document::extend_selection_home_at_cursor(cursor, &doc.lines);
+        assert!(cursor.head.x == 0);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == TAB_WIDTH);
+        assert!(cursor.anchor.y == 0);
+    }
+    #[test]
+    fn single_cursor_extend_selection_home_moves_cursor_head_to_text_start_when_cursor_at_line_start(){
+        let mut doc = Document::default();
+        let mut line = String::new();
+        for _ in 0..TAB_WIDTH{
+            line.push(' ');
+        }
+        line.push_str("idk");
+        doc.lines = vec![line];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        Document::extend_selection_home_at_cursor(cursor, &doc.lines);
+        assert!(cursor.head.x == TAB_WIDTH);
+        assert!(cursor.head.y == 0);
+        assert!(cursor.anchor.x == 0);
+        assert!(cursor.anchor.y == 0);
+    }
+
+//EXTEND SELECTION END
+    #[test]
+    fn single_cursor_extend_selection_end_works(){
+        let mut doc = Document::default();
+        doc.lines = vec!["idk".to_string()];
+
+        let cursor = doc.cursors.get_mut(0).unwrap();
+        Document::extend_selection_end_at_cursor(cursor, &doc.lines);
+        assert!(cursor.head.x() == 3);
+        assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 0);
+        assert!(cursor.anchor.y() == 0);
+    }
+
+//extend selection page up
+//extend selection page down
     
 //COLLAPSE SELECTION CURSOR
-        //when on same line and head less than anchor
+    //when on same line and head less than anchor
     #[test]
     fn single_cursor_collapse_selection_cursors_works_when_on_same_line_and_head_less_than_anchor(){
         let mut doc = Document::default();
@@ -1350,9 +1576,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(cursor.anchor.x() == 8);
         assert!(cursor.anchor.y() == 0);
     }
-        //when on same line and anchor less than head
+    //when on same line and anchor less than head
     #[test]
-    fn collapse_selection_cursors_works_when_on_same_line_and_anchor_less_than_head(){
+    fn single_cursor_collapse_selection_cursors_works_when_on_same_line_and_anchor_less_than_head(){
         let mut doc = Document::default();
         doc.lines = vec!["something".to_string()];
 
@@ -1365,9 +1591,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(cursor.anchor.x() == 1);
         assert!(cursor.anchor.y() == 0);
     }
-        //when on different lines and head less than anchor
+    //when on different lines and head less than anchor
     #[test]
-    fn collapse_selection_cursors_works_when_on_different_lines_and_head_less_than_anchor(){
+    fn single_cursor_collapse_selection_cursors_works_when_on_different_lines_and_head_less_than_anchor(){
         let mut doc = Document::default();
         doc.lines = vec!["something".to_string(), "idk".to_string()];
 
@@ -1382,9 +1608,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(cursor.anchor.x() == 3);
         assert!(cursor.anchor.y() == 0);
     }
-        //when on different lines and anchor less than head
+    //when on different lines and anchor less than head
     #[test]
-    fn collapse_selection_cursors_works_when_on_different_lines_and_anchor_less_than_head(){
+    fn single_cursor_collapse_selection_cursors_works_when_on_different_lines_and_anchor_less_than_head(){
         let mut doc = Document::default();
         doc.lines = vec!["idk".to_string(), "something".to_string()];
 
@@ -1409,7 +1635,7 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
     fn len_returns_last_line_number(){
         let mut doc = Document::default();
         doc.lines = vec!["idk".to_string(), "some".to_string(), "shit".to_string()];
-        assert!(doc.len() == 3);
+        assert!(doc.lines().len() == 3);
     }
 
     //scroll client view down

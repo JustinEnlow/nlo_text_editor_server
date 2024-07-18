@@ -135,7 +135,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
             match editor.open_document(&file_path, client_address){
                 Ok(_) => {
                     if let Some(doc) = editor.document(client_address){
-                        Some(ServerResponse::FileOpened{file_name: doc.file_name(), document_length: doc.len()})
+                        Some(ServerResponse::FileOpened{file_name: doc.file_name(), document_length: doc.lines().len()})
                     }else{
                         Some(ServerResponse::Failed("no document open".to_string()))
                     }
@@ -402,7 +402,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::MoveCursorPageDown => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.move_cursor_page_down();
+                doc.move_cursors_page_down();
                 let should_update_client_view = doc.scroll_view_following_cursor();
                 if should_update_client_view{
                     Some(ServerResponse::DisplayView{
