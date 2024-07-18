@@ -446,7 +446,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         },
         ServerAction::InserChar(c) => {
             if let Some(doc) = editor.document_mut(client_address){
-                doc.insert_char_at_cursors(c);
+                doc.insert_char(c);
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 

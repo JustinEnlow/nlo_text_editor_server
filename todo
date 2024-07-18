@@ -34,3 +34,6 @@
     [ ] create functions to add cursor above/below
     [ ] is multi-cursor stuff related to find/replace selections?
 [ ] cursor to line start vs line text start - allow user to decide whether they are separate or if subsequent presses toggle between the two
+[ ] test that all functions that perform edits set document modified to true
+[ ] when selection > 0 and cursor moves, collapse selection cursors. + test
+[ ] combine overlapping selection into one selection
