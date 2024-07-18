@@ -836,16 +836,22 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y == 2);
         assert!(cursor.head.x == 0);
+        assert!(cursor.anchor.y == 2);
+        assert!(cursor.anchor.x == 0);
         // setting y past doc end does nothing
         let position = Position::new(0, 3);
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y == 2);
         assert!(cursor.head.x == 0);
+        assert!(cursor.anchor.y == 2);
+        assert!(cursor.anchor.x == 0);
         // setting x past line end should restrict x to line end
         let position = Position::new(4, 2);
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y == 2);
         assert!(cursor.head.x == 3);
+        assert!(cursor.anchor.y == 2);
+        assert!(cursor.anchor.x == 3);
     }
 
     //add cursor on line above
@@ -859,10 +865,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         doc.add_cursor_on_line_above();
         println!("{:?}", doc.cursors);
         assert!(doc.cursors[0].head == Position::new(9, 1));
+        assert!(doc.cursors[0].anchor == Position::new(9, 1));
         assert!(doc.cursors[1].head == Position::new(3, 0));
+        assert!(doc.cursors[1].anchor == Position::new(3, 0));
     }
     #[test]
     fn add_cursor_on_line_above_works_after_adding_cursor_on_line_below(){
+        // loop through cursors. save cursor with lowest y. add one above that
         assert!(false);
     }
     //add cursor on line below
@@ -887,6 +896,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(doc.lines == vec!["".to_string(), "idk".to_string()]);
         assert!(cursor.head.x() == 0);
         assert!(cursor.head.y() == 1);
+        assert!(cursor.anchor.x() == 0);
+        assert!(cursor.anchor.y() == 1);
     }
 // AUTO-INDENT
     #[test]
@@ -905,6 +916,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(doc.lines == vec!["idk".to_string()]);
         assert!(cursor.head.x() == 1);
         assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 1);
+        assert!(cursor.anchor.y() == 0);
     }
 
 //INSERT SELECTION
@@ -930,6 +943,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(doc.lines == vec![exptected_line]);
         assert!(doc.cursors.last().unwrap().head.x() == TAB_WIDTH);
         assert!(doc.cursors.last().unwrap().head.y() == 0);
+        assert!(doc.cursors.last().unwrap().anchor.x() == TAB_WIDTH);
+        assert!(doc.cursors.last().unwrap().anchor.y() == 0);
     }
 
 //DELETE
@@ -943,6 +958,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(doc.lines == vec!["dk".to_string()]);
         assert!(cursor.head.x() == 0);
         assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 0);
+        assert!(cursor.anchor.y() == 0);
     }
     #[test]
     fn single_cursor_delete_at_end_of_line_appends_next_line_to_current(){
@@ -956,6 +973,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         assert!(doc.lines == vec!["idksomething".to_string()]);
         assert!(cursor.head.x() == 3);
         assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 3);
+        assert!(cursor.anchor.y() == 0);
     }
     #[test]
     fn single_cursor_delete_removes_selection(){
@@ -977,6 +996,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         println!("{:?}", cursor.head);
         assert!(cursor.head.x() == 0);
         assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 0);
+        assert!(cursor.anchor.y() == 0);
     }
     #[test]
     fn single_cursor_backspace_at_start_of_line_appends_current_line_to_end_of_previous_line(){
@@ -992,6 +1013,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         println!("{:?}", cursor.head);
         assert!(cursor.head.x() == 3);
         assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 3);
+        assert!(cursor.anchor.y() == 0);
     }
     #[test]
     fn single_cursor_backspace_removes_previous_tab(){
@@ -1012,6 +1035,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         println!("{:?}", cursor.head);
         assert!(cursor.head.x() == 0);
         assert!(cursor.head.y() == 0);
+        assert!(cursor.anchor.x() == 0);
+        assert!(cursor.anchor.y() == 0);
     }
     
 //MOVE CURSOR LEFT
@@ -1024,6 +1049,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::move_cursor_left(cursor, &doc.lines);
         assert!(cursor.head.y == 0);
         assert!(cursor.head.x == 0);
+        assert!(cursor.anchor.y == 0);
+        assert!(cursor.anchor.x == 0);
     }
     #[test]
     fn single_cursor_move_cursor_left_works(){
@@ -1035,9 +1062,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y == 0);
         assert!(cursor.head.x == 1);
+        assert!(cursor.anchor.y == 0);
+        assert!(cursor.anchor.x == 1);
         Document::move_cursor_left(cursor, &doc.lines);
         assert!(cursor.head.y == 0);
         assert!(cursor.head.x == 0);
+        assert!(cursor.anchor.y == 0);
+        assert!(cursor.anchor.x == 0);
     }
     #[test]
     fn single_cursor_move_cursor_left_at_line_start_moves_cursor_to_previous_line_end(){
@@ -1049,9 +1080,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y == 1);
         assert!(cursor.head.x == 0);
+        assert!(cursor.anchor.y == 1);
+        assert!(cursor.anchor.x == 0);
         Document::move_cursor_left(cursor, &doc.lines);
         assert!(cursor.head.y == 0);
         assert!(cursor.head.x == 3);
+        assert!(cursor.anchor.y == 0);
+        assert!(cursor.anchor.x == 3);
     }
     
 //MOVE CURSOR UP
@@ -1064,6 +1099,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::move_cursor_up(cursor, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 0);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 0);
     }
     #[test]
     fn single_cursor_move_cursor_up_works_when_moving_to_shorter_line(){
@@ -1075,9 +1112,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 1);
         assert!(cursor.head.x() == 3);
+        assert!(cursor.anchor.y() == 1);
+        assert!(cursor.anchor.x() == 3);
         Document::move_cursor_up(cursor, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 1);
     }
     #[test]
     fn single_cursor_move_cursor_up_works_when_moving_to_longer_line(){
@@ -1089,9 +1130,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 1);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 1);
+        assert!(cursor.anchor.x() == 1);
         Document::move_cursor_up(cursor, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 1);
     }
 
 //MOVE CURSOR RIGHT
@@ -1105,9 +1150,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 3);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 3);
         Document::move_cursor_right(cursor, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 3);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 3);
     }
     #[test]
     fn single_cursor_move_cursor_right_works(){
@@ -1118,6 +1167,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::move_cursor_right(cursor, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 1);
     }
     #[test]
     fn single_cursor_move_cursor_right_at_line_end_moves_cursor_to_start_of_next_line(){
@@ -1129,9 +1180,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 1);
         Document::move_cursor_right(cursor, &doc.lines);
         assert!(cursor.head.y() == 1);
         assert!(cursor.head.x() == 0);
+        assert!(cursor.anchor.y() == 1);
+        assert!(cursor.anchor.x() == 0);
     }
 
 //MOVE CURSOR DOWN
@@ -1145,10 +1200,14 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 3);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 3);
         Document::move_cursor_down(cursor, &doc.lines);
         println!("{:?}", cursor);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 3);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 3);
     }
     #[test]
     fn single_cursor_move_cursor_down_works_when_moving_to_shorter_line(){
@@ -1160,9 +1219,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 3);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 3);
         Document::move_cursor_down(cursor, &doc.lines);
         assert!(cursor.head.y() == 1);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 1);
+        assert!(cursor.anchor.x() == 1);
     }
     #[test]
     fn single_cursor_move_cursor_down_works_when_moving_to_longer_line(){
@@ -1174,9 +1237,13 @@ fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
         Document::set_cursor_position(cursor, position, &doc.lines);
         assert!(cursor.head.y() == 0);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 0);
+        assert!(cursor.anchor.x() == 1);
         Document::move_cursor_down(cursor, &doc.lines);
         assert!(cursor.head.y() == 1);
         assert!(cursor.head.x() == 1);
+        assert!(cursor.anchor.y() == 1);
+        assert!(cursor.anchor.x() == 1);
     }
 
 //move cursors page up
