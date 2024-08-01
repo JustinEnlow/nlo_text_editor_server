@@ -82,7 +82,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -105,7 +105,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -120,7 +120,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -149,7 +149,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -163,7 +163,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -177,7 +177,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -191,7 +191,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -205,7 +205,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -221,13 +221,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -243,13 +243,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -265,13 +265,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -287,13 +287,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -309,13 +309,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -331,13 +331,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -353,13 +353,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -375,13 +375,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -397,13 +397,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -419,13 +419,13 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                         content: doc.get_client_view_text(), 
                         line_numbers: doc.get_client_view_line_numbers(), 
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position(), 
+                        document_cursor_position: doc.document_cursor_position(), 
                         modified: doc.is_modified()
                     })
                 }else{
                     Some(ServerResponse::CursorPosition{
                         client_cursor_positions: doc.get_client_cursor_positions(), 
-                        document_cursor_position: doc.cursor_position()
+                        document_cursor_position: doc.document_cursor_position()
                     })
                 }
             }else{
@@ -439,7 +439,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -455,7 +455,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -469,7 +469,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
                     client_cursor_positions: doc.get_client_cursor_positions(), 
-                    document_cursor_position: doc.cursor_position(), 
+                    document_cursor_position: doc.document_cursor_position(), 
                     modified: doc.is_modified()
                 })
             }else{
@@ -484,7 +484,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                             content: doc.get_client_view_text(), 
                             line_numbers: doc.get_client_view_line_numbers(), 
                             client_cursor_positions: doc.get_client_cursor_positions(), 
-                            document_cursor_position: doc.cursor_position(), 
+                            document_cursor_position: doc.document_cursor_position(), 
                             modified: doc.is_modified()
                         })
                 //    }
