@@ -114,7 +114,6 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         }
         ServerAction::GoTo{line_number} => {
             if let Some(doc) = editor.document_mut(client_address){
-                //if doc.go_to(line_number).is_ok(){
                 doc.go_to(line_number);
                 let _ = doc.scroll_view_following_cursor();
                 Some(ServerResponse::DisplayView{
@@ -124,9 +123,6 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                     document_cursor_position: doc.cursor_position(), 
                     modified: doc.is_modified()
                 })
-                //}else{
-                //    Some(ServerResponse::Failed("could not go to line number".to_string()))
-                //}
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
@@ -135,7 +131,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
             match editor.open_document(&file_path, client_address){
                 Ok(_) => {
                     if let Some(doc) = editor.document(client_address){
-                        Some(ServerResponse::FileOpened{file_name: doc.file_name(), document_length: doc.lines().len()})
+                        Some(ServerResponse::FileOpened{file_name: doc.file_name(), document_length: /*doc.lines().len()*/doc.text().len_lines()})
                     }else{
                         Some(ServerResponse::Failed("no document open".to_string()))
                     }
@@ -216,14 +212,6 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                 Some(ServerResponse::Failed("no document open".to_string()))
             }
         },
-        //ServerAction::RequestClientCursorPosition => {
-        //    if let Some(doc) = editor.document(){
-        //        let client_cursor_position = doc.get_client_cursor_position();
-        //        Some(ServerResponse::DisplayClientCursorPosition(client_cursor_position))
-        //    }else{
-        //        Some(ServerResponse::DisplayClientCursorPosition(None))
-        //    }
-        //},
         ServerAction::MoveCursorDocumentEnd => {
             if let Some(doc) = editor.document_mut(client_address){
                 doc.move_cursors_document_end();
@@ -460,8 +448,8 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         }
         ServerAction::InsertNewline => {
             if let Some(doc) = editor.document_mut(client_address){
-                //doc.insert_newline();
-                doc.enter();
+                //doc.enter();
+                doc.insert_char('\n');
                 let _ = doc.scroll_view_following_cursor();
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
@@ -490,8 +478,8 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         }
         ServerAction::Save => {
             if let Some(doc) = editor.document_mut(client_address){
-                match doc.save(){
-                    Ok(_) => {
+                //match doc.save(){
+                //    Ok(_) => {
                         Some(ServerResponse::DisplayView{
                             content: doc.get_client_view_text(), 
                             line_numbers: doc.get_client_view_line_numbers(), 
@@ -499,11 +487,11 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                             document_cursor_position: doc.cursor_position(), 
                             modified: doc.is_modified()
                         })
-                    }
-                    Err(e) => {
-                        Some(ServerResponse::Failed(format!("failed to save. error: {}", e)))
-                    }
-                }
+                //    }
+                //    Err(e) => {
+                //        Some(ServerResponse::Failed(format!("failed to save. error: {}", e)))
+                //    }
+                //}
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }

@@ -48,7 +48,7 @@ pub enum ServerResponse{
     CursorPosition{client_cursor_positions: Vec<Position>, document_cursor_position: Position}
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct View{
     horizontal_start: usize,
     vertical_start: usize,

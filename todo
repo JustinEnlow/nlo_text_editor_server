@@ -37,3 +37,6 @@
 [ ] test that all functions that perform edits set document modified to true
 [ ] when selection > 0 and cursor moves, collapse selection cursors. + test
 [ ] combine overlapping selection into one selection
+[ ] define cursor semantic enum(bar/block)
+    [ ] handle all document functionality using different cursor semantics
+[ ] make document edit functions return an edited bool. if requested edit does not actually result in an edit to the text, return false. server can return an acknowledged response instead of DisplayView response, saving perf
