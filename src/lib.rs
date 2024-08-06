@@ -4,11 +4,19 @@ use serde::{Serialize, Deserialize};
 
 pub mod editor;
 pub mod document;
+mod selection;
+mod movement;
 
 
 pub const MESSAGE_SIZE: usize = 8192;//4096;
 
 
+
+pub enum Operation{
+    Move(usize),
+    Delete(usize),
+    Insert(String),
+}
 
 #[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub enum ServerAction{

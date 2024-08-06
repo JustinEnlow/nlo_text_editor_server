@@ -8,35 +8,35 @@
 [x] set up client-server as document viewer with changeable view size
 [x] set up client-server as document viewer with scrolling detached from cursor position
 [x] set up client-server as document viewer with scrolling attached to cursor position
-    [x] move cursor right
-    [x] move cursor left
-    [x] move cursor up
-    [x] move cursor down
+    [x] move/extend selection right
+    [x] move/extend selection left
+    [x] move/extend selection up
+    [x] move/extend selection down
     [x] restrict cursor to line start/end
     [x] restrict cursor to document start/end
     [x] cursor left at line start moves to previous line end if available
     [x] cursor right at line end moves to next line start if available
     [x] make cursor maintain horizontal position or go to line end when moving up/down
+    [ ] when selection > 0 and cursor moves, collapse selection cursors. + test
 [x] set up client-server with editing functionality
-    [x] insert chars
-    [x] remove chars
+    [x] insert
+    [x] remove
+    [ ] figure out how to handle proper tabs, instead of inserting spaces
 [x] set up client-server to save documents
+[x] set up client-server to handle multiple client connections
+[ ] handle multiple selections
+    [x] make Selection struct containing head and anchor components
+    [x] make Vec<Selection> for holding data for multiple selections
+    [ ] create functions to add selection above/below
+    [ ] is multi-selection stuff related to find/replace selections?
 
 
 
 // not in a specific order
-[ ] figure out how to handle proper tabs, instead of inserting spaces
-[x] set up client-server to handle multiple client connections
 [ ] highlighting for syntax/selections
-[ ] handle multiple cursors
-    [x] make Cursor struct containing cursor_head and cursor_achor
-    [x] make Vec<Cursor> for holding data for multiple cursor
-    [ ] create functions to add cursor above/below
-    [ ] is multi-cursor stuff related to find/replace selections?
 [ ] cursor to line start vs line text start - allow user to decide whether they are separate or if subsequent presses toggle between the two
-[ ] test that all functions that perform edits set document modified to true
-[ ] when selection > 0 and cursor moves, collapse selection cursors. + test
-[ ] combine overlapping selection into one selection
+[ ] test that all functions that perform edits set document modified to true. or use diff of last saved state vs current state to determine modified status
+[ ] combine overlapping selections into one selection
 [ ] define cursor semantic enum(bar/block)
     [ ] handle all document functionality using different cursor semantics
 [ ] make document edit functions return an edited bool. if requested edit does not actually result in an edit to the text, return false. server can return an acknowledged response instead of DisplayView response, saving perf

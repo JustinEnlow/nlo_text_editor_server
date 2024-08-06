@@ -435,6 +435,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         ServerAction::InserChar(c) => {
             if let Some(doc) = editor.document_mut(client_address){
                 doc.insert_char(c);
+                let _ = doc.scroll_view_following_cursor();
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
@@ -465,6 +466,7 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         ServerAction::InsertTab => {
             if let Some(doc) = editor.document_mut(client_address){
                 doc.tab();
+                let _ = doc.scroll_view_following_cursor();
                 Some(ServerResponse::DisplayView{
                     content: doc.get_client_view_text(), 
                     line_numbers: doc.get_client_view_line_numbers(), 
@@ -478,8 +480,8 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
         }
         ServerAction::Save => {
             if let Some(doc) = editor.document_mut(client_address){
-                //match doc.save(){
-                //    Ok(_) => {
+                match doc.save(){
+                    Ok(_) => {
                         Some(ServerResponse::DisplayView{
                             content: doc.get_client_view_text(), 
                             line_numbers: doc.get_client_view_line_numbers(), 
@@ -487,11 +489,11 @@ fn server_action_to_response(action: ServerAction, client_address: &str, editor:
                             document_cursor_position: doc.document_cursor_position(), 
                             modified: doc.is_modified()
                         })
-                //    }
-                //    Err(e) => {
-                //        Some(ServerResponse::Failed(format!("failed to save. error: {}", e)))
-                //    }
-                //}
+                    }
+                    Err(e) => {
+                        Some(ServerResponse::Failed(format!("failed to save. error: {}", e)))
+                    }
+                }
             }else{
                 Some(ServerResponse::Failed("no document open".to_string()))
             }

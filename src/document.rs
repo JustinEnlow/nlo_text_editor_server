@@ -1,7 +1,8 @@
 use crate::{Position, View};
+use crate::selection::{Selection, Selection2d};
 use std::fs::{self, File};
-use std::{error::Error, fmt::Display};
-use std::io::{BufReader, Write};
+use std::error::Error;
+use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 use unicode_segmentation::UnicodeSegmentation;
 use ropey::{Rope, RopeSlice};
@@ -11,36 +12,13 @@ pub const TAB_WIDTH: usize = 4;
 
 
 
-#[derive(PartialEq, Debug)]
-struct DocumentCursor{
-    head: Position,
-    anchor: Position,
-}
-impl DocumentCursor{
-    pub fn new(head: Position, anchor: Position) -> Self{
-        Self{
-            head,
-            anchor
-        }
-    }
-}
-
-
-
-#[derive(Default, PartialEq, Clone, Debug)]
-struct RopeCursor{
-    anchor: usize,
-    head: usize,
-    stored_line_position: usize,
-}
-
-
-
 pub struct Document{
     text: Rope,
     file_name: Option<String>,
     modified: bool,
-    rope_cursors: Vec<RopeCursor>,
+    /// must have at least one selection at all times
+    selections: Vec<Selection>, //Selections
+    /// The dimensions of the area a client has for displaying this document
     client_view: View,
 }
 impl Default for Document{
@@ -49,7 +27,7 @@ impl Default for Document{
             text: Rope::new(),
             file_name: None,
             modified: false,
-            rope_cursors: vec![RopeCursor::default()],
+            selections: vec![Selection::default()],
             client_view: View::default(),
         }
     }
@@ -62,7 +40,7 @@ impl Document{
             text,
             file_name: Some(path.to_string_lossy().to_string()),
             modified: false,
-            rope_cursors: vec![RopeCursor::default()],
+            selections: vec![Selection::default()],
             client_view: View::default(),
         })
     }
@@ -76,36 +54,38 @@ impl Document{
     }
 
     /// Translates a 1 dimensional rope cursor to a 2 dimensional document cursor
-    fn rope_cursor_position_to_document_cursor_position(rope_cursor: RopeCursor, text: RopeSlice) -> DocumentCursor{
-        let line_number_head = text.char_to_line(rope_cursor.head);
-        let line_number_anchor = text.char_to_line(rope_cursor.anchor);
+    fn rope_cursor_position_to_document_cursor_position(rope_cursor: Selection, text: RopeSlice) -> Selection2d{
+        let line_number_head = text.char_to_line(rope_cursor.head());
+        let line_number_anchor = text.char_to_line(rope_cursor.anchor());
 
         let line_at_head_start_idx = text.line_to_char(line_number_head);
         let line_at_anchor_start_idx = text.line_to_char(line_number_anchor);
 
-        DocumentCursor{
-            head: Position::new(
-                rope_cursor.head - line_at_head_start_idx, 
+        Selection2d::new(
+            Position::new(
+                rope_cursor.head() - line_at_head_start_idx, 
                 line_number_head
-            ),
-            anchor: Position::new(
-                rope_cursor.anchor - line_at_anchor_start_idx,
+            ), 
+            Position::new(
+                rope_cursor.anchor() - line_at_anchor_start_idx, 
                 line_number_anchor
             )
-        }
+        )
     }
+    
     //TODO: return head and anchor positions
     //TODO: return Vec<Position> document cursor positions
     pub fn document_cursor_position(&self) -> Position{
-        let cursor = self.rope_cursors.last().unwrap();
+        let cursor = self.selections.last().unwrap();
         let document_cursor = Document::rope_cursor_position_to_document_cursor_position(cursor.clone(), self.text.slice(..));
         
         Position::new(
-            document_cursor.head.x.saturating_add(1), 
-            document_cursor.head.y.saturating_add(1)
+            document_cursor.head().x.saturating_add(1), 
+            document_cursor.head().y.saturating_add(1)
         )
     }
-    fn clear_cursors_except_main(cursors: &mut Vec<RopeCursor>){
+    
+    fn clear_non_primary_selections(cursors: &mut Vec<Selection>){
         for x in (0..cursors.len()).rev(){
             if x != 0{
                 cursors.pop();
@@ -122,27 +102,21 @@ impl Document{
         line_width
     }
     /// Sets rope cursor to a 0 based line number
-    fn set_rope_cursor_position_from_line_number(mut rope_cursor: RopeCursor, line_number: usize, text: RopeSlice) -> RopeCursor{
+    fn set_rope_cursor_position_from_line_number(mut selection: Selection, line_number: usize, text: RopeSlice) -> Selection{
         if line_number < text.len_lines(){ //is len lines 1 based?
             let start_of_line = text.line_to_char(line_number);
             let line = text.line(line_number);
-            //let mut line_width = 0;
-            //for char in line.chars(){
-            //    if char != '\n'{
-            //        line_width = line_width + 1;
-            //    }
-            //}
             let line_width = Document::line_width_excluding_newline(line);
-            if rope_cursor.stored_line_position < line_width{
-                rope_cursor.anchor = start_of_line + rope_cursor.stored_line_position;
-                rope_cursor.head = start_of_line + rope_cursor.stored_line_position;
+            if selection.stored_line_position() < line_width{
+                selection.set_anchor(start_of_line + selection.stored_line_position());
+                selection.set_head(start_of_line + selection.stored_line_position());
             }else{
-                rope_cursor.anchor = start_of_line + line_width;
-                rope_cursor.head = start_of_line + line_width;
+                selection.set_anchor(start_of_line + line_width);
+                selection.set_head(start_of_line + line_width);
             }
         }
     
-        rope_cursor
+        selection
     }
 
     //pub fn add_cursor_on_line_above(&mut self){
@@ -203,30 +177,30 @@ impl Document{
     pub fn insert_char(&mut self, c: char){
         self.modified = true;
         
-        for cursor in self.rope_cursors.iter_mut(){
+        for cursor in self.selections.iter_mut(){
             (*cursor, self.text) = Document::insert_char_at_cursor(cursor.clone(), self.text.slice(..), c);
         }
     }
-    fn insert_char_at_cursor(mut rope_cursor: RopeCursor, text: RopeSlice, char: char) -> (RopeCursor, Rope){
+    fn insert_char_at_cursor(mut selection: Selection, text: RopeSlice, char: char) -> (Selection, Rope){
         let mut new_text = Rope::from(text);
-        new_text.insert_char(rope_cursor.head, char);
-        rope_cursor = Document::move_cursor_right(rope_cursor, new_text.slice(..));
+        new_text.insert_char(selection.head(), char);
+        selection = Document::move_cursor_right(selection, new_text.slice(..));
 
-        (rope_cursor, new_text)
+        (selection, new_text)
     }
 
     pub fn tab(&mut self){
         self.modified = true;
 
-        for cursor in self.rope_cursors.iter_mut(){
-            let tab_distance = distance_to_next_multiple_of_tab_width(cursor.clone());
+        for selection in self.selections.iter_mut(){
+            let tab_distance = distance_to_next_multiple_of_tab_width(selection.clone());
             let modified_tab_width = if tab_distance > 0 && tab_distance < TAB_WIDTH{
                 tab_distance
             }else{
                 TAB_WIDTH
             };
             for _ in 0..modified_tab_width{
-                (*cursor, self.text) = Document::insert_char_at_cursor(cursor.clone(), self.text.slice(..), ' ');
+                (*selection, self.text) = Document::insert_char_at_cursor(selection.clone(), self.text.slice(..), ' ');
             }
         }
     }
@@ -235,17 +209,17 @@ impl Document{
     pub fn delete(&mut self){
         self.modified = true;
 
-        for cursor in self.rope_cursors.iter_mut(){
-            self.text = Document::delete_at_cursor(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            self.text = Document::delete_at_cursor(selection.clone(), self.text.slice(..));
         }
     }
     //TODO: handle selection deletion, not just char deletion
     //TODO: ensure we cannot delete at EOF
-    fn delete_at_cursor(cursor: RopeCursor, text: RopeSlice) -> Rope{
+    fn delete_at_cursor(selection: Selection, text: RopeSlice) -> Rope{
         let mut new_text = Rope::from(text);
 
-        if cursor.head < text.len_chars(){
-            new_text.remove(cursor.head..cursor.head+1);
+        if selection.head() < text.len_chars(){
+            new_text.remove(selection.head()..selection.head()+1);
         }
 
         new_text
@@ -254,204 +228,226 @@ impl Document{
     pub fn backspace(&mut self){
         self.modified = true;
 
-        for cursor in self.rope_cursors.iter_mut(){
-            let cursor_line_position = cursor.head - self.text.line_to_char(self.text.char_to_line(cursor.head));
+        for selection in self.selections.iter_mut(){
+            let cursor_line_position = selection.head() - self.text.line_to_char(self.text.char_to_line(selection.head()));
             
             if cursor_line_position >= TAB_WIDTH
             // handles case where user adds a space after a tab, and wants to delete only the space
             && cursor_line_position % TAB_WIDTH == 0
             // if previous 4 chars are spaces, delete 4. otherwise, use default behavior
             && slice_is_all_spaces(
-                self.text.line(self.text.char_to_line(cursor.head)).as_str().unwrap(),
+                self.text.line(self.text.char_to_line(selection.head())).as_str().unwrap(),
                 cursor_line_position - TAB_WIDTH,
                 cursor_line_position
             ){
                 for _ in 0..TAB_WIDTH{
-                    *cursor = Document::move_cursor_left(cursor.clone(), self.text.slice(..));
-                    self.text = Document::delete_at_cursor(cursor.clone(), self.text.slice(..));
+                    *selection = Document::move_cursor_left(selection.clone(), self.text.slice(..));
+                    self.text = Document::delete_at_cursor(selection.clone(), self.text.slice(..));
                 }
             }
-            else if cursor.head > 0{
-                *cursor = Document::move_cursor_left(cursor.clone(), self.text.slice(..));
-                self.text = Document::delete_at_cursor(cursor.clone(), self.text.slice(..));
+            else if selection.head() > 0{
+                *selection = Document::move_cursor_left(selection.clone(), self.text.slice(..));
+                self.text = Document::delete_at_cursor(selection.clone(), self.text.slice(..));
             }
         }
     }
 
     pub fn move_cursors_up(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_up(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_up(selection.clone(), self.text.slice(..));
         }
     }
-    fn move_cursor_up(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn move_cursor_up(mut selection: Selection, text: RopeSlice) -> Selection{
+        assert!(selection.head() == selection.anchor());
+        let line_number = text.char_to_line(selection.head());
         let previous_line_number = line_number.saturating_sub(1);
-        rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, previous_line_number, text.slice(..));
+        selection = Document::set_rope_cursor_position_from_line_number(selection, previous_line_number, text.slice(..));
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_down(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_down(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_down(selection.clone(), self.text.slice(..));
         }
     }
-    fn move_cursor_down(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn move_cursor_down(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let next_line_number = line_number.saturating_add(1);
-        rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, next_line_number, text);
+        selection = Document::set_rope_cursor_position_from_line_number(selection, next_line_number, text);
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_right(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_right(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_right(selection.clone(), self.text.slice(..));
         }
     }
-    fn move_cursor_right(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        if /*(*/rope_cursor.head.saturating_add(1) < text.len_chars()
-        || rope_cursor.head.saturating_add(1) == text.len_chars()/*)*/
-        //&& (rope_cursor.anchor.saturating_add(1) < text.len_chars()
-        //|| rope_cursor.anchor.saturating_add(1) == text.len_chars())
-        {
-            rope_cursor.head = rope_cursor.head.saturating_add(1);
-            rope_cursor.anchor = rope_cursor.anchor.saturating_add(1);
-            let line_start = text.line_to_char(text.char_to_line(rope_cursor.head));
-            rope_cursor.stored_line_position = rope_cursor.head.saturating_sub(line_start);
+    fn move_cursor_right(mut selection: Selection, text: RopeSlice) -> Selection{
+        if selection.head().saturating_add(1) < text.len_chars()
+        || selection.head().saturating_add(1) == text.len_chars(){
+            selection.set_head(selection.head().saturating_add(1));
+            selection.set_anchor(selection.anchor().saturating_add(1));
+            let line_start = text.line_to_char(text.char_to_line(selection.head()));
+            selection.set_stored_line_position(selection.head().saturating_sub(line_start));
         }
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_left(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_left(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_left(selection.clone(), self.text.slice(..));
         }
     }
-    fn move_cursor_left(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        rope_cursor.head = rope_cursor.head.saturating_sub(1);
-        rope_cursor.anchor = rope_cursor.anchor.saturating_sub(1);
-        let line_start = text.line_to_char(text.char_to_line(rope_cursor.head));
-        rope_cursor.stored_line_position = rope_cursor.head.saturating_sub(line_start);
+    fn move_cursor_left(mut selection: Selection, text: RopeSlice) -> Selection{
+        selection.set_head(selection.head().saturating_sub(1));
+        selection.set_anchor(selection.anchor().saturating_sub(1));
+        let line_start = text.line_to_char(text.char_to_line(selection.head()));
+        selection.set_stored_line_position(selection.head().saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_page_up(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_page_up(cursor.clone(), self.text.slice(..), self.client_view.clone())
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_page_up(selection.clone(), self.text.slice(..), self.client_view.clone())
         }
     }
-    fn move_cursor_page_up(mut rope_cursor: RopeCursor, text: RopeSlice, client_view: View) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn move_cursor_page_up(mut selection: Selection, text: RopeSlice, client_view: View) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let goal_line_number = line_number.saturating_sub(client_view.height.saturating_sub(1));
-        rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, goal_line_number, text);
+        selection = Document::set_rope_cursor_position_from_line_number(selection, goal_line_number, text);
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_page_down(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_page_down(cursor.clone(), self.text.slice(..), self.client_view.clone());
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_page_down(selection.clone(), self.text.slice(..), self.client_view.clone());
         }
     }
-    fn move_cursor_page_down(mut rope_cursor: RopeCursor, text: RopeSlice, client_view: View) -> RopeCursor{
+    fn move_cursor_page_down(mut selection: Selection, text: RopeSlice, client_view: View) -> Selection{
         let document_length = text.len_lines();
-        let line_number = text.char_to_line(rope_cursor.head);
+        let line_number = text.char_to_line(selection.head());
         let goal_line_number = if line_number.saturating_add(client_view.height) <= document_length{
             line_number.saturating_add(client_view.height.saturating_sub(1))
         }else{
             document_length.saturating_sub(1)
         };
-        rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, goal_line_number, text);
+        selection = Document::set_rope_cursor_position_from_line_number(selection, goal_line_number, text);
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_home(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_home(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_home(selection.clone(), self.text.slice(..));
         }
     }
-    fn move_cursor_home(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn move_cursor_home(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let line_start = text.line_to_char(line_number);
         let text_start_offset = get_first_non_whitespace_character_index(text.line(line_number));
         let text_start = line_start.saturating_add(text_start_offset);
 
-        if rope_cursor.head == text_start{
+        if selection.head() == text_start{
             //TODO: break out into own move_cursor_line_start fn?
-            rope_cursor.head = line_start;
-            rope_cursor.anchor = line_start;
+            selection.set_head(line_start);
+            selection.set_anchor(line_start);
         }else{
             //TODO: break out into own move_cursor_line_text_start fn?
-            rope_cursor.head = text_start;
-            rope_cursor.anchor = text_start;
+            selection.set_head(text_start);
+            selection.set_anchor(text_start);
         }
-        rope_cursor.stored_line_position = rope_cursor.head.saturating_sub(line_start);
+        selection.set_stored_line_position(selection.head().saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_end(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::move_cursor_end(cursor.clone(), self.text.slice(..));
+        for selection in self.selections.iter_mut(){
+            if selection.head() != selection.anchor(){
+                *selection = Document::collapse_selection_cursor(selection.clone());
+            }
+            *selection = Document::move_cursor_end(selection.clone(), self.text.slice(..));
         }
     }
-    fn move_cursor_end(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn move_cursor_end(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let line = text.line(line_number);
-        //let mut line_width = 0;
-        //for char in line.chars(){
-        //    if char != '\n'{
-        //        line_width = line_width + 1;
-        //    }
-        //}
         let line_width = Document::line_width_excluding_newline(line);
         let line_start = text.line_to_char(line_number);
         let line_end = line_start.saturating_add(line_width);
 
-        rope_cursor.head = line_end;
-        rope_cursor.anchor = line_end;
-        rope_cursor.stored_line_position = line_end.saturating_sub(line_start);
+        selection.set_head(line_end);
+        selection.set_anchor(line_end);
+        selection.set_stored_line_position(line_end.saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_document_start(&mut self){
-        Document::clear_cursors_except_main(&mut self.rope_cursors);
-        match self.rope_cursors.get_mut(0){
-            Some(cursor) => {
-                *cursor = Document::move_cursor_document_start(cursor.clone());
+        Document::clear_non_primary_selections(&mut self.selections);
+        match self.selections.get_mut(0){
+            Some(selection) => {
+                if selection.head() != selection.anchor(){
+                    *selection = Document::collapse_selection_cursor(selection.clone());
+                }
+                *selection = Document::move_cursor_document_start(selection.clone());
             }
             None => panic!("No cursor at 0 index. This should be impossible.")
         }
     }
-    fn move_cursor_document_start(mut rope_cursor: RopeCursor) -> RopeCursor{
-        rope_cursor.head = 0;
-        rope_cursor.anchor = 0;
-        rope_cursor.stored_line_position = 0;
+    fn move_cursor_document_start(mut selection: Selection) -> Selection{
+        selection.set_head(0);
+        selection.set_anchor(0);
+        selection.set_stored_line_position(0);
 
-        rope_cursor
+        selection
     }
 
     pub fn move_cursors_document_end(&mut self){
-        Document::clear_cursors_except_main(&mut self.rope_cursors);
-        match self.rope_cursors.get_mut(0){
-            Some(cursor) => {
-                *cursor = Document::move_cursor_document_end(cursor.clone(), self.text.slice(..));
+        Document::clear_non_primary_selections(&mut self.selections);
+        match self.selections.get_mut(0){
+            Some(selection) => {
+                if selection.head() != selection.anchor(){
+                    *selection = Document::collapse_selection_cursor(selection.clone());
+                }
+                *selection = Document::move_cursor_document_end(selection.clone(), self.text.slice(..));
             }
             None => panic!("No cursor at 0 index. This should be impossible.")
         }
     }
-    fn move_cursor_document_end(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        rope_cursor.head = text.len_chars();
-        rope_cursor.anchor = text.len_chars();
-        let line_start = text.line_to_char(text.char_to_line(rope_cursor.head));
-        rope_cursor.stored_line_position = text.len_chars().saturating_sub(line_start);
+    fn move_cursor_document_end(mut selection: Selection, text: RopeSlice) -> Selection{
+        selection.set_head(text.len_chars());
+        selection.set_anchor(text.len_chars());
+        let line_start = text.line_to_char(text.char_to_line(selection.head()));
+        selection.set_stored_line_position(text.len_chars().saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     //pub fn extend_selections_right(&mut self){
@@ -459,18 +455,16 @@ impl Document{
     //        Document::extend_selection_right_at_cursor(cursor, &self.lines);
     //    }
     //}
-    fn extend_selection_right(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        if /*(*/rope_cursor.head.saturating_add(1) < text.len_chars()
-        || rope_cursor.head.saturating_add(1) == text.len_chars()/*)*/
-        //&& (rope_cursor.anchor.saturating_add(1) < text.len_chars()
-        //|| rope_cursor.anchor.saturating_add(1) == text.len_chars())
+    fn extend_selection_right(mut selection: Selection, text: RopeSlice) -> Selection{
+        if selection.head().saturating_add(1) < text.len_chars()
+        || selection.head().saturating_add(1) == text.len_chars()
         {
-            rope_cursor.head = rope_cursor.head.saturating_add(1);
-            let line_start = text.line_to_char(text.char_to_line(rope_cursor.head));
-            rope_cursor.stored_line_position = rope_cursor.head.saturating_sub(line_start);
+            selection.set_head(selection.head().saturating_add(1));
+            let line_start = text.line_to_char(text.char_to_line(selection.head()));
+            selection.set_stored_line_position(selection.head().saturating_sub(line_start));
         }
 
-        rope_cursor
+        selection
     }
 
     //pub fn extend_selections_left(&mut self){
@@ -478,12 +472,12 @@ impl Document{
     //        Document::extend_selection_left_at_cursor(cursor, &self.lines);
     //    }
     //}
-    fn extend_selection_left(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        rope_cursor.head = rope_cursor.head.saturating_sub(1);
-        let line_start = text.line_to_char(text.char_to_line(rope_cursor.head));
-        rope_cursor.stored_line_position = rope_cursor.head.saturating_sub(line_start);
+    fn extend_selection_left(mut selection: Selection, text: RopeSlice) -> Selection{
+        selection.set_head(selection.head().saturating_sub(1));
+        let line_start = text.line_to_char(text.char_to_line(selection.head()));
+        selection.set_stored_line_position(selection.head().saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     //pub fn extend_selections_up(&mut self){
@@ -491,27 +485,21 @@ impl Document{
     //        Document::extend_selection_up_at_cursor(cursor, &self.lines);
     //    }
     //}
-    fn extend_selection_up(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn extend_selection_up(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let previous_line_number = line_number.saturating_sub(1);
         if previous_line_number < text.len_lines(){
             let start_of_line = text.line_to_char(previous_line_number);
             let line = text.line(previous_line_number);
-            //let mut line_width = 0;
-            //for char in line.chars(){
-            //    if char != '\n'{
-            //        line_width = line_width + 1;
-            //    }
-            //}
             let line_width = Document::line_width_excluding_newline(line);
-            if rope_cursor.stored_line_position < line_width{
-                rope_cursor.head = start_of_line + rope_cursor.stored_line_position;
+            if selection.stored_line_position() < line_width{
+                selection.set_head(start_of_line + selection.stored_line_position());
             }else{
-                rope_cursor.head = start_of_line + line_width;
+                selection.set_head(start_of_line + line_width);
             }
         }
 
-        rope_cursor
+        selection
     }
 
     //pub fn extend_selections_down(&mut self){
@@ -519,27 +507,21 @@ impl Document{
     //        Document::extend_selection_down_at_cursor(cursor, &self.lines);
     //    }
     //}
-    fn extend_selection_down(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn extend_selection_down(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let next_line_number = line_number.saturating_add(1);
         if next_line_number < text.len_lines(){
             let start_of_line = text.line_to_char(next_line_number);
             let line = text.line(next_line_number);
-            //let mut line_width = 0;
-            //for char in line.chars(){
-            //    if char != '\n'{
-            //        line_width = line_width + 1;
-            //    }
-            //}
             let line_width = Document::line_width_excluding_newline(line);
-            if rope_cursor.stored_line_position < line_width{
-                rope_cursor.head = start_of_line + rope_cursor.stored_line_position;
+            if selection.stored_line_position() < line_width{
+                selection.set_head(start_of_line + selection.stored_line_position());
             }else{
-                rope_cursor.head = start_of_line + line_width;
+                selection.set_head(start_of_line + line_width);
             }
         }
 
-        rope_cursor
+        selection
     }
 
     //pub fn extend_selections_home(&mut self){
@@ -547,20 +529,20 @@ impl Document{
     //        Document::extend_selection_home_at_cursor(cursor, &self.lines);
     //    }
     //}
-    fn extend_selection_home(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn extend_selection_home(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let line_start = text.line_to_char(line_number);
         let text_start_offset = get_first_non_whitespace_character_index(text.line(line_number));
         let text_start = line_start.saturating_add(text_start_offset);
 
-        if rope_cursor.head == text_start{
-            rope_cursor.head = line_start;
+        if selection.head() == text_start{
+            selection.set_head(line_start);
         }else{
-            rope_cursor.head = text_start;
+            selection.set_head(text_start);
         }
-        rope_cursor.stored_line_position = rope_cursor.head.saturating_sub(line_start);
+        selection.set_stored_line_position(selection.head().saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     //pub fn extend_selections_end(&mut self){
@@ -568,23 +550,17 @@ impl Document{
     //        Document::extend_selection_end_at_cursor(cursor, &self.lines);
     //    }
     //}
-    fn extend_selection_end(mut rope_cursor: RopeCursor, text: RopeSlice) -> RopeCursor{
-        let line_number = text.char_to_line(rope_cursor.head);
+    fn extend_selection_end(mut selection: Selection, text: RopeSlice) -> Selection{
+        let line_number = text.char_to_line(selection.head());
         let line = text.line(line_number);
-        //let mut line_width = 0;
-        //for char in line.chars(){
-        //    if char != '\n'{
-        //        line_width = line_width + 1;
-        //    }
-        //}
         let line_width = Document::line_width_excluding_newline(line);
         let line_start = text.line_to_char(line_number);
         let line_end = line_start.saturating_add(line_width);
 
-        rope_cursor.head = line_end;
-        rope_cursor.stored_line_position = line_end.saturating_sub(line_start);
+        selection.set_head(line_end);
+        selection.set_stored_line_position(line_end.saturating_sub(line_start));
 
-        rope_cursor
+        selection
     }
 
     //pub fn _extend_selections_page_up(&mut self){}
@@ -592,47 +568,32 @@ impl Document{
     //pub fn _extend_selections_page_down(&mut self){}
 
     pub fn collapse_selection_cursors(&mut self){
-        for cursor in self.rope_cursors.iter_mut(){
-            *cursor = Document::collapse_selection_cursor(cursor.clone());
+        for selection in self.selections.iter_mut(){
+            *selection = Document::collapse_selection_cursor(selection.clone());
         }
     }
-    //fn collapse_selection_cursor(cursor: &mut Cursor){
-    //    if cursor.head.y == cursor.anchor.y{
-    //        cursor.anchor.x = cursor.stored_line_position;
-    //        cursor.head.x = cursor.stored_line_position;
-    //    }else{
-    //        cursor.anchor.x = cursor.stored_line_position;
-    //        cursor.head.x = cursor.stored_line_position;
-    //        cursor.anchor.y = cursor.head.y;
-    //    }
-    //}
-    fn collapse_selection_cursor(mut cursor: RopeCursor) -> RopeCursor{
-        cursor.anchor = cursor.head;
+    fn collapse_selection_cursor(mut selection: Selection) -> Selection{
+        selection.set_anchor(selection.head());
 
-        cursor
+        selection
     }
 
-    //pub fn save(&mut self) -> Result<(), Box<dyn Error>>{
-    //    if let Some(file_name) = &self.file_name{ // does nothing if file_name is None
-    //        let mut file = fs::File::create(file_name)?;
-    //        
-    //        for line in &self.lines {
-    //            file.write_all(line.as_bytes())?;
-    //            file.write_all(b"\n")?;
-    //        }
-    //        
-    //        self.modified = false;
-    //    }
-    //    
-    //    Ok(())
-    //}
+    pub fn save(&mut self) -> Result<(), Box<dyn Error>>{
+        if let Some(file_name) = &self.file_name{ // does nothing if file_name is None
+            self.text.write_to(BufWriter::new(fs::File::create(file_name)?))?;
+            
+            self.modified = false;
+        }
+        
+        Ok(())
+    }
 
     pub fn go_to(&mut self, line_number: usize){
-        Document::clear_cursors_except_main(&mut self.rope_cursors);
-        match self.rope_cursors.get_mut(0){
-            Some(cursor) => {
-                *cursor = Document::set_rope_cursor_position_from_line_number(
-                    cursor.clone(), 
+        Document::clear_non_primary_selections(&mut self.selections);
+        match self.selections.get_mut(0){
+            Some(selection) => {
+                *selection = Document::set_rope_cursor_position_from_line_number(
+                    selection.clone(), 
                     line_number, 
                     self.text.slice(..)
                 );
@@ -646,7 +607,6 @@ impl Document{
     }
 
     pub fn scroll_client_view_down(&mut self, amount: usize){
-        //if self.client_view.vertical_start + self.client_view.height + amount <= self.lines.len(){
         if self.client_view.vertical_start + self.client_view.height + amount <= self.text.len_lines(){
             self.client_view.vertical_start = self.client_view.vertical_start.saturating_add(amount);
         }
@@ -656,17 +616,7 @@ impl Document{
     }
     pub fn scroll_client_view_right(&mut self, amount: usize){
         let mut longest = 0;
-        //for line in &self.lines{
         for line in self.text.lines(){
-            //if line.len() > longest{
-            //    longest = line.len();
-            //}
-            //let mut line_width = 0;
-            //for char in line.chars(){
-            //    if char != '\n'{
-            //        line_width = line_width + 1;
-            //    }
-            //}
             let line_width = Document::line_width_excluding_newline(line);
 
             if line_width > longest{
@@ -685,26 +635,26 @@ impl Document{
     pub fn scroll_view_following_cursor(&mut self) -> bool{
         // following last cursor pushed to cursors vec
         //let cursor = self.cursors.last().expect("No cursor. This should be impossible");
-        let cursor = Document::rope_cursor_position_to_document_cursor_position(self.rope_cursors.last().expect("No cursor. This should be impossible.").clone(), self.text.slice(..));
+        let cursor = Document::rope_cursor_position_to_document_cursor_position(self.selections.last().expect("No cursor. This should be impossible.").clone(), self.text.slice(..));
         //
 
         let mut should_update_client_view = false;
 
-        if cursor.head.y() < self.client_view.vertical_start{
-            self.client_view.vertical_start = cursor.head.y();
+        if cursor.head().y() < self.client_view.vertical_start{
+            self.client_view.vertical_start = cursor.head().y();
             should_update_client_view = true;
         }
-        else if cursor.head.y() >= self.client_view.vertical_start.saturating_add(self.client_view.height){
-            self.client_view.vertical_start = cursor.head.y().saturating_sub(self.client_view.height).saturating_add(1);
+        else if cursor.head().y() >= self.client_view.vertical_start.saturating_add(self.client_view.height){
+            self.client_view.vertical_start = cursor.head().y().saturating_sub(self.client_view.height).saturating_add(1);
             should_update_client_view = true;
         }
     
-        if cursor.head.x() < self.client_view.horizontal_start{
-            self.client_view.horizontal_start = cursor.head.x();
+        if cursor.head().x() < self.client_view.horizontal_start{
+            self.client_view.horizontal_start = cursor.head().x();
             should_update_client_view = true;
         }
-        else if cursor.head.x() >= self.client_view.horizontal_start.saturating_add(self.client_view.width){
-            self.client_view.horizontal_start = cursor.head.x().saturating_sub(self.client_view.width).saturating_add(1);
+        else if cursor.head().x() >= self.client_view.horizontal_start.saturating_add(self.client_view.width){
+            self.client_view.horizontal_start = cursor.head().x().saturating_sub(self.client_view.width).saturating_add(1);
             should_update_client_view = true;
         }
 
@@ -754,7 +704,7 @@ impl Document{
 
     pub fn get_client_cursor_positions(&self) -> Vec<Position>{
         let mut positions = Vec::new();
-        for cursor in &self.rope_cursors{
+        for cursor in &self.selections{
             if let Some(client_cursor) = Document::client_view_cursor_position(
                 Document::rope_cursor_position_to_document_cursor_position(
                     cursor.clone(), 
@@ -769,14 +719,14 @@ impl Document{
     }
     //TODO: return head and anchor so selections can be displayed
     // translates a document cursor position to a client view cursor position. if outside client view, returns None
-    fn client_view_cursor_position(doc_cursor: DocumentCursor, client_view: View) -> Option<Position>{
-        if doc_cursor.head.x >= client_view.horizontal_start
-        && doc_cursor.head.x < client_view.horizontal_start.saturating_add(client_view.width)
-        && doc_cursor.head.y >= client_view.vertical_start
-        && doc_cursor.head.y < client_view.vertical_start.saturating_add(client_view.height){
+    fn client_view_cursor_position(doc_cursor: Selection2d, client_view: View) -> Option<Position>{
+        if doc_cursor.head().x >= client_view.horizontal_start
+        && doc_cursor.head().x < client_view.horizontal_start.saturating_add(client_view.width)
+        && doc_cursor.head().y >= client_view.vertical_start
+        && doc_cursor.head().y < client_view.vertical_start.saturating_add(client_view.height){
             Some(Position{
-                x: doc_cursor.head.x.saturating_sub(client_view.horizontal_start),
-                y: doc_cursor.head.y.saturating_sub(client_view.vertical_start)
+                x: doc_cursor.head().x.saturating_sub(client_view.horizontal_start),
+                y: doc_cursor.head().y.saturating_sub(client_view.vertical_start)
             })
         }else{None}
     }
@@ -807,12 +757,9 @@ fn slice_is_all_spaces(line: &str, start_of_slice: usize, end_of_slice: usize) -
 }
 
 //TODO: calculate cursor_line_position instead of using stored_line_position
-//fn distance_to_next_multiple_of_tab_width(cursor: &Cursor) -> usize{
-fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
-    //if cursor.head.x % TAB_WIDTH != 0{
-    if cursor.stored_line_position % TAB_WIDTH != 0{
-        //TAB_WIDTH - (cursor.head.x % TAB_WIDTH)
-        TAB_WIDTH - (cursor.stored_line_position % TAB_WIDTH)
+fn distance_to_next_multiple_of_tab_width(cursor: Selection) -> usize{
+    if cursor.stored_line_position() % TAB_WIDTH != 0{
+        TAB_WIDTH - (cursor.stored_line_position() % TAB_WIDTH)
     }else{
         0
     }
@@ -844,9 +791,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn document_cursor_position_works_when_rope_cursor_head_and_anchor_same_and_on_same_line(){
         let text = Rope::from("idk\nsomething");
-        let rope_cursor = RopeCursor{anchor: 2, head: 2, stored_line_position: 2};  //id[]k\nsomething
+        let rope_cursor = Selection::new(2, 2, 2);  //id[]k\nsomething
         let doc_cursor = Document::rope_cursor_position_to_document_cursor_position(rope_cursor, text.slice(..));
-        let expected_doc_cursor = DocumentCursor::new(Position::new(2, 0), Position::new(2, 0));
+        let expected_doc_cursor = Selection2d::new(Position::new(2, 0), Position::new(2, 0));
         /*
         id[]k
         something
@@ -857,9 +804,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn document_cursor_position_works_when_rope_cursor_head_and_anchor_different_but_on_same_line(){
         let text = Rope::from("idk\nsomething");
-        let rope_cursor = RopeCursor{anchor: 1, head: 2, stored_line_position: 2};  //i[d]k\nsomething
+        let rope_cursor = Selection::new(1, 2, 2);  //i[d]k\nsomething
         let doc_cursor = Document::rope_cursor_position_to_document_cursor_position(rope_cursor, text.slice(..));
-        let expected_doc_cursor = DocumentCursor::new(Position::new(2, 0), Position::new(1, 0));
+        let expected_doc_cursor = Selection2d::new(Position::new(2, 0), Position::new(1, 0));
         /*
         i[d]k
         something
@@ -870,9 +817,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn document_cursor_position_works_when_rope_cursor_head_and_anchor_same_but_on_new_line(){
         let text = Rope::from("idk\nsomething");
-        let rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //idk\n[]something
+        let rope_cursor = Selection::new(4, 4, 0);  //idk\n[]something
         let doc_cursor = Document::rope_cursor_position_to_document_cursor_position(rope_cursor, text.slice(..));
-        let expected_doc_cursor = DocumentCursor::new(Position::new(0, 1), Position::new(0, 1));
+        let expected_doc_cursor = Selection2d::new(Position::new(0, 1), Position::new(0, 1));
         /*
         idk
         []something
@@ -883,9 +830,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn document_cursor_position_works_when_rope_cursor_head_and_anchor_different_and_on_different_lines(){
         let text = Rope::from("idk\nsomething");
-        let rope_cursor = RopeCursor{anchor: 2, head: 5, stored_line_position: 1};  //idk[k\ns]omething
+        let rope_cursor = Selection::new(2, 5, 1);  //id[k\ns]omething
         let doc_cursor = Document::rope_cursor_position_to_document_cursor_position(rope_cursor, text.slice(..));
-        let expected_doc_cursor = DocumentCursor::new(Position::new(1, 1), Position::new(2, 0));
+        let expected_doc_cursor = Selection2d::new(Position::new(1, 1), Position::new(2, 0));
         /*
         id[k
         s]omething
@@ -897,8 +844,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
 //CLEAR ROPE CURSORS EXCEPT MAIN
     #[test]
     fn clear_cursors_except_main_works(){
-        let mut cursors = vec![RopeCursor::default(), RopeCursor::default(), RopeCursor::default()];
-        Document::clear_cursors_except_main(&mut cursors);
+        let mut cursors = vec![Selection::default(), Selection::default(), Selection::default()];
+        Document::clear_non_primary_selections(&mut cursors);
         assert!(cursors.get(0).is_some());
         assert!(cursors.get(1).is_none());
     }
@@ -907,8 +854,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn set_rope_cursor_position_works_when_desired_position_is_inside_doc_boundaries(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor::default();    //[]idk\nsomething\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 14, head: 14, stored_line_position: 0};   //idk\nsomething\n[]else
+        let mut rope_cursor = Selection::default();    //[]idk\nsomething\nelse
+        let expected_rope_cursor = Selection::new(14, 14, 0);   //idk\nsomething\n[]else
         let line_number: usize = 2;//3;
         rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, line_number, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -917,8 +864,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn set_rope_cursor_position_should_do_nothing_when_desired_line_number_is_greater_than_doc_length(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor::default();    //[]idk\nsomething\nelse
-        let expected_rope_cursor = RopeCursor::default();   //[]idk\nsomething\nelse
+        let mut rope_cursor = Selection::default();    //[]idk\nsomething\nelse
+        let expected_rope_cursor = Selection::default();   //[]idk\nsomething\nelse
         let line_number: usize = 5;//6;
         rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, line_number, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -927,8 +874,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn set_rope_cursor_position_restricts_cursor_to_line_end_when_cursor_stored_line_position_is_greater_than_line_width(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 13, head: 13, stored_line_position: 9};    //idk\nsomething[]\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 9}; //idk[]\nsomething\nelse
+        let mut rope_cursor = Selection::new(13, 13, 9);    //idk\nsomething[]\nelse
+        let expected_rope_cursor = Selection::new(3, 3, 9); //idk[]\nsomething\nelse
         let line_number: usize = 0;//1;
         rope_cursor = Document::set_rope_cursor_position_from_line_number(rope_cursor, line_number, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -970,9 +917,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn enter_works(){
         let text = Rope::from("idk\nsomething");
-        let mut rope_cursor = RopeCursor{anchor: 13, head: 13, stored_line_position: 9};    //idk\nsomething[]
-        let expected_rope_cursor = RopeCursor{anchor: 14, head: 14, stored_line_position: 0}; //idk\nsomething\n[]
-        let mut new_text = Rope::new();
+        let mut rope_cursor = Selection::new(13, 13, 9);    //idk\nsomething[]
+        let expected_rope_cursor = Selection::new(14, 14, 0);   //idk\nsomething\n[]
+        let new_text;
         let expected_text = Rope::from("idk\nsomething\n");
         (rope_cursor, new_text) = Document::insert_char_at_cursor(rope_cursor, text.slice(..), '\n');
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -990,9 +937,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn insert_char_works(){
         let text = Rope::from("idk\nsomething\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};    //idk\n[]something\n
-        let expected_rope_cursor = RopeCursor{anchor: 5, head: 5, stored_line_position: 1}; //idk\nx[]something\n
-        let mut new_text = Rope::new();
+        let mut rope_cursor = Selection::new(4, 4, 0);  //idk\n[]something\n
+        let expected_rope_cursor = Selection::new(5, 5, 1); //idk\nx[]something\n
+        let new_text;
         let expected_text = Rope::from("idk\nxsomething\n");
         (rope_cursor, new_text) = Document::insert_char_at_cursor(rope_cursor, text.slice(..), 'x');
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -1032,9 +979,9 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn delete_works(){
         let text = Rope::from("idk\nsomething\n");
-        let rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};    //idk\n[]something\n
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //idk\n[]omething\n
-        let mut new_text = Rope::new();
+        let rope_cursor = Selection::new(4, 4, 0);  //idk\n[]something\n
+        let expected_rope_cursor = Selection::new(4, 4, 0); //idk\n[]omething\n
+        let new_text;
         let expected_text = Rope::from("idk\nomething\n");
         new_text = Document::delete_at_cursor(rope_cursor.clone(), text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -1043,30 +990,15 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
         assert!(new_text == expected_text);
     }
     //#[test]
-    //fn single_cursor_delete_at_end_of_line_appends_next_line_to_current(){
-    //    let mut doc = Document::default();
-    //    doc.lines = vec!["idk".to_string(), "something".to_string()];
-//
-    //    let cursor = doc.cursors.get_mut(0).unwrap();
-    //    let position = Position::new(3, 0);
-    //    *cursor = Document::set_cursor_position(cursor, position, &doc.lines).unwrap();
-    //    Document::delete_at_cursor(cursor, &mut doc.lines, &mut doc.modified);
-    //    assert!(doc.lines == vec!["idksomething".to_string()]);
-    //    assert!(cursor.head.x() == 3);
-    //    assert!(cursor.head.y() == 0);
-    //    assert!(cursor.anchor.x() == 3);
-    //    assert!(cursor.anchor.y() == 0);
-    //}
-    //#[test]
     //fn single_cursor_delete_removes_selection(){
     //    assert!(false);
     //}
     #[test]
     fn delete_at_end_of_file_does_nothing(){
         let text = Rope::from("idk\nsomething\n");
-        let rope_cursor = RopeCursor{anchor: 14, head: 14, stored_line_position: 0};    //idk\nsomething\n[]
-        let expected_rope_cursor = RopeCursor{anchor: 14, head: 14, stored_line_position: 0}; //idk\nsomething\n[]
-        let mut new_text = Rope::new();
+        let rope_cursor = Selection::new(14, 14, 0);    //idk\nsomething\n[]
+        let expected_rope_cursor = Selection::new(14, 14, 0);   //idk\nsomething\n[]
+        let new_text;
         let expected_text = Rope::from("idk\nsomething\n");
         new_text = Document::delete_at_cursor(rope_cursor.clone(), text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
@@ -1137,8 +1069,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_left_at_document_start_does_not_move_cursor(){
         let text = Rope::from("idk\nsomething\nelse");  //TODO: set up a better text to use, specific to move left
-        let mut rope_cursor = RopeCursor::default();
-        let expected_rope_cursor = RopeCursor::default();
+        let mut rope_cursor = Selection::default();
+        let expected_rope_cursor = Selection::default();
         rope_cursor = Document::move_cursor_left(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1146,8 +1078,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_left_works(){
         let text = Rope::from("idk\nsomething\nelse");  //TODO: set up a better text to use, specific to move left
-        let mut rope_cursor = RopeCursor{anchor: 2, head: 2, stored_line_position: 2};
-        let expected_rope_cursor = RopeCursor{anchor: 1, head: 1, stored_line_position: 1};
+        let mut rope_cursor = Selection::new(2, 2, 2);
+        let expected_rope_cursor = Selection::new(1, 1, 1);
         rope_cursor = Document::move_cursor_left(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1155,8 +1087,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_left_at_start_of_line_resets_stored_line_position(){
         let text = Rope::from("idk\nsomething\nelse");  //TODO: set up a better text to use, specific to move left
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //idk\n[]something\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3}; //idk[]\nsomething\nelse
+        let mut rope_cursor = Selection::new(4, 4, 0);  //idk\n[]something\nelse
+        let expected_rope_cursor = Selection::new(3, 3, 3); //idk[]\nsomething\nelse
         rope_cursor = Document::move_cursor_left(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1166,8 +1098,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_up_at_document_start_does_not_move_cursor(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor::default();
-        let expected_rope_cursor = RopeCursor::default();
+        let mut rope_cursor = Selection::default();
+        let expected_rope_cursor = Selection::default();
         rope_cursor = Document::move_cursor_up(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1175,8 +1107,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_up_works_when_moving_to_shorter_line(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 13, head: 13, stored_line_position: 9};  //idk\nsomething[]\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 9};   //idk[]\nsomething\nelse  //should maintain previous stored_line_position
+        let mut rope_cursor = Selection::new(13, 13, 9);    //idk\nsomething[]\nelse
+        let expected_rope_cursor = Selection::new(3, 3, 9); //idk[]\nsomething\nelse
         rope_cursor = Document::move_cursor_up(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1184,8 +1116,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_up_works_when_moving_to_longer_line(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 18, head: 18, stored_line_position: 4};    //idk\nsomething\nelse[]
-        let expected_rope_cursor = RopeCursor{anchor: 8, head: 8, stored_line_position: 4}; //idk\nsome[]thing\nelse
+        let mut rope_cursor = Selection::new(18, 18, 4);    //idk\nsomething\nelse[]
+        let expected_rope_cursor = Selection::new(8, 8, 4); //idk\nsome[]thing\nelse
         rope_cursor = Document::move_cursor_up(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1195,8 +1127,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_right_at_document_end_does_not_move_cursor(){
         let text = Rope::from("012\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //012\n[]
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //012\n[]
+        let mut rope_cursor = Selection::new(4, 4, 0);  //012\n[]
+        let expected_rope_cursor = Selection::new(4, 4, 0); //012\n[]
         rope_cursor = Document::move_cursor_right(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1205,8 +1137,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_right_works(){
         let text = Rope::from("012\n");
-        let mut rope_cursor = RopeCursor::default();    //[]012\n
-        let expected_rope_cursor = RopeCursor{anchor: 1, head: 1, stored_line_position: 1}; //0[]12\n
+        let mut rope_cursor = Selection::default();    //[]012\n
+        let expected_rope_cursor = Selection::new(1, 1, 1); //0[]12\n
         rope_cursor = Document::move_cursor_right(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1214,8 +1146,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_right_at_end_of_line_resets_stored_line_position(){
         let text = Rope::from("012\n0");
-        let mut rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3};  //012[]\n0
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //012\n[]0
+        let mut rope_cursor = Selection::new(3, 3, 3);  //012[]\n0
+        let expected_rope_cursor = Selection::new(4, 4, 0); //012\n[]0
         rope_cursor = Document::move_cursor_right(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1225,8 +1157,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_down_at_document_end_does_not_move_cursor(){
         let text = Rope::from("012\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //012\n[]
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //012\n[]
+        let mut rope_cursor = Selection::new(4, 4, 0);  //012\n[]
+        let expected_rope_cursor = Selection::new(4, 4, 0); //012\n[]
         rope_cursor = Document::move_cursor_down(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1234,8 +1166,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_down_works_when_moving_to_shorter_line(){
         let text = Rope::from("012\n0");
-        let mut rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3};  //012[]\n0
-        let expected_rope_cursor = RopeCursor{anchor: 5, head: 5, stored_line_position: 3}; //012\n0[]  //should maintain previous stored_line_position
+        let mut rope_cursor = Selection::new(3, 3, 3);  //012[]\n0
+        let expected_rope_cursor = Selection::new(5, 5, 3); //012\n0[]
         rope_cursor = Document::move_cursor_down(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1243,8 +1175,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_down_works_when_moving_to_longer_line(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3}; //idk[]\nsomething\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 7, head: 7, stored_line_position: 3}; //idk\nsom[]ething\nelse
+        let mut rope_cursor = Selection::new(3, 3, 3);  //idk[]\nsomething\nelse
+        let expected_rope_cursor = Selection::new(7, 7, 3); //idk\nsom[]ething\nelse
         rope_cursor = Document::move_cursor_down(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1255,8 +1187,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     fn move_cursor_page_up_works(){
         let text = Rope::from("idk\nsomething\nelse");
         let client_view = View{horizontal_start: 0, vertical_start: 0, width: 2, height: 2};
-        let mut rope_cursor = RopeCursor{anchor: 6, head: 6, stored_line_position: 2};  //idk\nso[]mething\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 2, head: 2, stored_line_position: 2}; //id[]k\nsomething\nelse
+        let mut rope_cursor = Selection::new(6, 6, 2);  //idk\nso[]mething\nelse
+        let expected_rope_cursor = Selection::new(2, 2, 2); //id[]k\nsomething\nelse
         rope_cursor = Document::move_cursor_page_up(rope_cursor, text.slice(..), client_view);
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1266,8 +1198,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     fn move_cursor_page_down_works(){
         let text = Rope::from("idk\nsomething\nelse");
         let client_view = View{horizontal_start: 0, vertical_start: 0, width: 2, height: 2};
-        let mut rope_cursor = RopeCursor::default();  //[]idk\nsomething\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //idk\n[]something\nelse
+        let mut rope_cursor = Selection::default();  //[]idk\nsomething\nelse
+        let expected_rope_cursor = Selection::new(4, 4, 0); //idk\n[]something\nelse
         rope_cursor = Document::move_cursor_page_down(rope_cursor, text.slice(..), client_view);
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1277,8 +1209,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_home_moves_cursor_to_text_start_when_cursor_past_text_start(){
         let text = Rope::from("    idk\n");
-        let mut rope_cursor = RopeCursor{anchor: 6, head: 6, stored_line_position: 6};  //    id[]k\n
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 4}; //    []idk\n
+        let mut rope_cursor = Selection::new(6, 6, 6);  //id[]k\n
+        let expected_rope_cursor = Selection::new(4, 4, 4); //    []idk\n
         rope_cursor = Document::move_cursor_home(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1286,8 +1218,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_home_moves_cursor_to_line_start_when_cursor_at_text_start(){
         let text = Rope::from("    idk\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 4};  //    []idk\n
-        let expected_rope_cursor = RopeCursor::default();   //[]    idk\n
+        let mut rope_cursor = Selection::new(4, 4, 4);  //    []idk\n
+        let expected_rope_cursor = Selection::default();   //[]    idk\n
         rope_cursor = Document::move_cursor_home(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1295,8 +1227,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_home_moves_cursor_to_text_start_when_cursor_before_text_start(){
         let text = Rope::from("    idk\n");
-        let mut rope_cursor = RopeCursor{anchor: 1, head: 1, stored_line_position: 1};  // []   idk\n
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 4}; //    []idk\n
+        let mut rope_cursor = Selection::new(1, 1, 1);  // []   idk\n
+        let expected_rope_cursor = Selection::new(4, 4, 4); //    []idk\n
         rope_cursor = Document::move_cursor_home(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1307,8 +1239,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_end_moves_cursor_to_line_end(){
         let text = Rope::from("idk\n");
-        let mut rope_cursor = RopeCursor::default();    //[]idk\n
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3}; //idk[]\n
+        let mut rope_cursor = Selection::default();    //[]idk\n
+        let expected_rope_cursor = Selection::new(3, 3, 3); //idk[]\n
         rope_cursor = Document::move_cursor_end(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1317,8 +1249,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
 //MOVE CURSOR DOC START
     #[test]
     fn move_cursor_doc_start_works(){
-        let mut rope_cursor = RopeCursor{anchor: 12, head: 12, stored_line_position: 12};
-        let expected_rope_cursor = RopeCursor::default();
+        let mut rope_cursor = Selection::new(12, 12, 12);
+        let expected_rope_cursor = Selection::default();
         rope_cursor = Document::move_cursor_document_start(rope_cursor);
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1327,8 +1259,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn move_cursor_document_end_works(){
         let text = Rope::from("idk\nsome\nshit");
-        let mut rope_cursor = RopeCursor::default();    //[]idk\nsome\nshit
-        let expected_rope_cursor = RopeCursor{anchor: 13, head: 13, stored_line_position: 4};   //idk\nsome\nshit[]
+        let mut rope_cursor = Selection::default();    //[]idk\nsome\nshit
+        let expected_rope_cursor = Selection::new(13, 13, 4);   //idk\nsome\nshit[]
         rope_cursor = Document::move_cursor_document_end(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1338,8 +1270,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_right_at_document_end_does_not_extend_selection(){
         let text = Rope::from("012\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //012\n[]
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //012\n[]
+        let mut rope_cursor = Selection::new(4, 4, 0);  //012\n[]
+        let expected_rope_cursor = Selection::new(4, 4, 0); //012\n[]
         rope_cursor = Document::extend_selection_right(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1348,8 +1280,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_right_works(){
         let text = Rope::from("012\n");
-        let mut rope_cursor = RopeCursor::default();    //[]012\n
-        let expected_rope_cursor = RopeCursor{anchor: 0, head: 1, stored_line_position: 1}; //[0]12\n
+        let mut rope_cursor = Selection::default();    //[]012\n
+        let expected_rope_cursor = Selection::new(0, 1, 1); //[0]12\n
         rope_cursor = Document::extend_selection_right(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1357,8 +1289,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_right_at_end_of_line_resets_stored_line_position(){
         let text = Rope::from("012\n0");
-        let mut rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3};  //012[]\n0
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 4, stored_line_position: 0}; //012[\n]0
+        let mut rope_cursor = Selection::new(3, 3, 3);  //012[]\n0
+        let expected_rope_cursor = Selection::new(3, 4, 0); //012[\n]0
         rope_cursor = Document::extend_selection_right(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1369,8 +1301,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_left_at_document_start_does_not_extend_selection(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor::default();
-        let expected_rope_cursor = RopeCursor::default();
+        let mut rope_cursor = Selection::default();
+        let expected_rope_cursor = Selection::default();
         rope_cursor = Document::extend_selection_left(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1378,8 +1310,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_left_works(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 2, head: 2, stored_line_position: 2};  //id[]k\nsomthing\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 2, head: 1, stored_line_position: 1}; //i]d[k\nsomething\nelse
+        let mut rope_cursor = Selection::new(2, 2, 2);  //id[]k\nsomething\nelse
+        let expected_rope_cursor = Selection::new(2, 1, 1); //i]d[k\nsomething\nelse
         rope_cursor = Document::extend_selection_left(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1387,8 +1319,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_left_at_start_of_line_resets_stored_line_position(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //idk\n[]something\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 3, stored_line_position: 3}; //idk]\n[something\nelse
+        let mut rope_cursor = Selection::new(4, 4, 0);  //idk\n[]something\nelse
+        let expected_rope_cursor = Selection::new(4, 3, 3); //idk]\n[something\nelse
         rope_cursor = Document::extend_selection_left(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1399,8 +1331,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_up_at_document_start_does_not_extend_selection(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor::default();
-        let expected_rope_cursor = RopeCursor::default();
+        let mut rope_cursor = Selection::default();
+        let expected_rope_cursor = Selection::default();
         rope_cursor = Document::extend_selection_up(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1408,8 +1340,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_up_works_when_moving_to_shorter_line(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 13, head: 13, stored_line_position: 9};  //idk\nsomething[]\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 13, head: 3, stored_line_position: 9};   //idk]\nsomething[\nelse  //should maintain previous stored_line_position
+        let mut rope_cursor = Selection::new(13, 13, 9);    //idk\nsomething[]\nelse
+        let expected_rope_cursor = Selection::new(13, 3, 9);    //idk]\nsomething[\nelse
         rope_cursor = Document::extend_selection_up(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1417,8 +1349,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_up_works_when_moving_to_longer_line(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 18, head: 18, stored_line_position: 4};    //idk\nsomething\nelse[]
-        let expected_rope_cursor = RopeCursor{anchor: 18, head: 8, stored_line_position: 4}; //idk\nsome]thing\nelse[
+        let mut rope_cursor = Selection::new(18, 18, 4);    //idk\nsomething\nelse[]
+        let expected_rope_cursor = Selection::new(18, 8, 4);    //idk\nsome]thing\nelse[
         rope_cursor = Document::extend_selection_up(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1428,8 +1360,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_down_at_document_end_does_not_extend_selection(){
         let text = Rope::from("012\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0};  //012\n[]
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 0}; //012\n[]
+        let mut rope_cursor = Selection::new(4, 4, 0);  //012\n[]
+        let expected_rope_cursor = Selection::new(4, 4, 0); //012\n[]
         rope_cursor = Document::extend_selection_down(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1437,8 +1369,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_down_works_when_moving_to_shorter_line(){
         let text = Rope::from("012\n0");
-        let mut rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3};  //012[]\n0
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 5, stored_line_position: 3}; //012[\n0]  //should maintain previous stored_line_position
+        let mut rope_cursor = Selection::new(3, 3, 3);  //012[]\n0
+        let expected_rope_cursor = Selection::new(3, 5, 3); //012[\n0]
         rope_cursor = Document::extend_selection_down(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1446,8 +1378,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_down_works_when_moving_to_longer_line(){
         let text = Rope::from("idk\nsomething\nelse");
-        let mut rope_cursor = RopeCursor{anchor: 3, head: 3, stored_line_position: 3}; //idk[]\nsomething\nelse
-        let expected_rope_cursor = RopeCursor{anchor: 3, head: 7, stored_line_position: 3}; //idk[\nsom]ething\nelse
+        let mut rope_cursor = Selection::new(3, 3, 3);  //idk[]\nsomething\nelse
+        let expected_rope_cursor = Selection::new(3, 7, 3); //idk[\nsom]ething\nelse
         rope_cursor = Document::extend_selection_down(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1457,8 +1389,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_home_moves_cursor_to_text_start_when_cursor_past_text_start(){
         let text = Rope::from("    idk\n");
-        let mut rope_cursor = RopeCursor{anchor: 6, head: 6, stored_line_position: 6};  //    id[]k\n
-        let expected_rope_cursor = RopeCursor{anchor: 6, head: 4, stored_line_position: 4}; //    ]id[k\n
+        let mut rope_cursor = Selection::new(6, 6, 6);  //    id[]k\n
+        let expected_rope_cursor = Selection::new(6, 4, 4); //    ]id[k\n
         rope_cursor = Document::extend_selection_home(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1466,8 +1398,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_home_moves_cursor_to_line_start_when_cursor_at_text_start(){
         let text = Rope::from("    idk\n");
-        let mut rope_cursor = RopeCursor{anchor: 4, head: 4, stored_line_position: 4};  //    []idk\n
-        let expected_rope_cursor = RopeCursor{anchor: 4, head: 0, stored_line_position: 0};   //]    [idk\n
+        let mut rope_cursor = Selection::new(4, 4, 4);  //    []idk\n
+        let expected_rope_cursor = Selection::new(4, 0, 0); //]    [idk\n
         rope_cursor = Document::extend_selection_home(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1475,8 +1407,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_home_moves_cursor_to_text_start_when_cursor_before_text_start(){
         let text = Rope::from("    idk\n");
-        let mut rope_cursor = RopeCursor{anchor: 1, head: 1, stored_line_position: 1};  // []   idk\n
-        let expected_rope_cursor = RopeCursor{anchor: 1, head: 4, stored_line_position: 4}; // [   ]idk\n
+        let mut rope_cursor = Selection::new(1, 1, 1);  // []   idk\n
+        let expected_rope_cursor = Selection::new(1, 4, 4); // [   ]idk\n
         rope_cursor = Document::extend_selection_home(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
@@ -1486,8 +1418,8 @@ fn distance_to_next_multiple_of_tab_width(cursor: RopeCursor) -> usize{
     #[test]
     fn extend_selection_end_moves_cursor_to_line_end(){
         let text = Rope::from("idk\n");
-        let mut rope_cursor = RopeCursor::default();    //[]idk\n
-        let expected_rope_cursor = RopeCursor{anchor: 0, head: 3, stored_line_position: 3}; //[idk]\n
+        let mut rope_cursor = Selection::default();    //[]idk\n
+        let expected_rope_cursor = Selection::new(0, 3, 3); //[idk]\n
         rope_cursor = Document::extend_selection_end(rope_cursor, text.slice(..));
         println!("expected: {expected_rope_cursor:?}\ngot: {rope_cursor:?}");
         assert!(rope_cursor == expected_rope_cursor);
