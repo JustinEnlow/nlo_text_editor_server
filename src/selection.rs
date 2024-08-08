@@ -62,27 +62,45 @@ impl Selection2d{
 
 
 
-pub struct Selections{
-    selections: Vec<Selection>,
-    primary_selection_index: usize,
-}
-impl Selections{
-    fn pop(&mut self) -> Option<Selection>{
-        //TODO: figure out how to determine what to set primary_selection_index to
-        if self.selections.len() == 1{
-            None
-        }else{
-            self.selections.pop()
-        }
-    }
-    fn push(&mut self, selection: Selection){
-        self.selections.push(selection);
-        self.primary_selection_index = self.primary_selection_index + 1;
-    }
-    fn primary(&self) -> &Selection{
-        &self.selections[self.primary_selection_index]
-    }
-    fn last(&self) -> &Selection{
-        self.selections.last().unwrap()
-    }
-}
+//pub struct Selections{
+//    selections: Vec<Selection>,
+//    primary_selection_index: usize,
+//}
+//impl Selections{
+//    pub fn pop(&mut self) -> Option<Selection>{
+//        //TODO: figure out how to determine what to set primary_selection_index to
+//        if self.selections.len() == 1{
+//            None
+//        }else{
+//            self.selections.pop()
+//        }
+//    }
+//    pub fn push(&mut self, selection: Selection){
+//        self.selections.push(selection);
+//        self.primary_selection_index = self.primary_selection_index + 1;
+//    }
+//    pub fn primary(&self) -> &Selection{
+//        &self.selections[self.primary_selection_index]
+//    }
+//    pub fn last(&self) -> &Selection{
+//        self.selections.last().unwrap()
+//    }
+//    //pub fn clear_non_primary_selections(cursors: &mut Vec<Selection>){
+//    pub fn clear_non_primary_selections(&mut self){
+//        //for x in (0..cursors.len()).rev(){
+//        //    if x != 0{
+//        //        cursors.pop();
+//        //    }
+//        //}
+//        //for x in (0..self.selections.len()).rev(){
+//        //    if x != 0{
+//        //        self.selections.pop();
+//        //    }
+//        //}
+//        for x in (0..self.selections.len()){
+//            if x != self.primary_selection_index{
+//                self.selections.pop();
+//            }
+//        }
+//    }
+//}
