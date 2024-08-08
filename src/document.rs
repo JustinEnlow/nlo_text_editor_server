@@ -670,16 +670,13 @@ impl Document{
         let mut client_view_text = String::new();
         for (y, line) in self.text.lines().enumerate(){
             let mut bounded_line = String::new();
-            if y < self.client_view.vertical_start{}
-            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*can return early, because we're past our view */}
-            else{
+            if y >= self.client_view.vertical_start
+            && y <= (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){
                 for (x, char) in line.chars().enumerate(){
-                    if x < self.client_view.horizontal_start{}
-                    else if x > (self.client_view.width.saturating_sub(1) + self.client_view.horizontal_start){}
-                    else{
-                        if char != '\n'{
-                            bounded_line.push(char);
-                        }
+                    if x >= self.client_view.horizontal_start
+                    && x <= (self.client_view.width.saturating_sub(1) + self.client_view.horizontal_start)
+                    && char != '\n'{
+                        bounded_line.push(char);
                     }
                 }
                 client_view_text.push_str(format!("{}\n", bounded_line).as_str());
@@ -692,10 +689,9 @@ impl Document{
     pub fn get_client_view_line_numbers(&self)-> String{
         let mut client_view_line_numbers = String::new();
         for (y, _) in self.text.lines().enumerate(){
-            if y < self.client_view.vertical_start{}
-            else if y > (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){/*potential early return*/}
-            else{
-                client_view_line_numbers.push_str(&format!("{}\n", y.saturating_add(1)))
+            if y >= self.client_view.vertical_start
+            && y <= (self.client_view.height.saturating_sub(1) + self.client_view.vertical_start){
+                client_view_line_numbers.push_str(&format!("{}\n", y.saturating_add(1)));
             }
         }
 
